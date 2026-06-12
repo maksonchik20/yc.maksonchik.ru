@@ -1,6 +1,2 @@
 django
-django-axes
-requests
-psutil
-mysqlclient
-pyTelegramBotAPI
+dataclasses

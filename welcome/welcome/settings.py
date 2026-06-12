@@ -1,6 +1,4 @@
 from pathlib import Path
-import os
-from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -11,15 +9,12 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
-    'axes',
-
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
     'webhook_tg.apps.WebhookTgConfig',
     'main.apps.MainConfig',
 ]
@@ -32,20 +27,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-
-    'axes.middleware.AxesMiddleware',
 ]
-
-AUTHENTICATION_BACKENDS = [
-    'axes.backends.AxesStandaloneBackend',
-    'django.contrib.auth.backends.ModelBackend',
-]
-
-AXES_ONLY_ADMIN_SITE = True
-AXES_FAILURE_LIMIT = 5
-AXES_COOLOFF_TIME = lambda request: timedelta(minutes=5)
-AXES_RESET_ON_SUCCESS = True
-AXES_LOCKOUT_PARAMETERS = ['username', 'ip_address']
 
 ROOT_URLCONF = 'welcome.urls'
 
