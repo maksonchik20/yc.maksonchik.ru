@@ -17,6 +17,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'webhook_tg.apps.WebhookTgConfig',
     'main.apps.MainConfig',
+    'ai_chat.apps.AiChatConfig',
 ]
 
 MIDDLEWARE = [

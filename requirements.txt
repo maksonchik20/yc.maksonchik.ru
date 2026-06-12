@@ -1,2 +1,4 @@
 django
 dataclasses
+openai
+pillow
