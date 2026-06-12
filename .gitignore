@@ -1,0 +1,10 @@
+venv
+db.sqlite3
+__pycache__
+static
+gunicorn.ctl
+env.py
+migrations
+sender.py
+audio.log
+gunicorn.log

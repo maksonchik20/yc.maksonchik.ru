@@ -1,0 +1,21 @@
+START_PHOTO_ID = "AgACAgIAAxkDAAEKAyRqJJYFv4D0Ix7NOIF7wjy8Jaq7ZgACKBhrG6BCKEmQv3TUzQcFxgEAAwIAA3gAAzsE"
+START_TEXT = (
+    "<b>Добро пожаловать!</b>\n\n"
+    "<b>Этот бот помогает контролировать\n"
+    "переписку.</b>\n\n"
+    "Возможности:\n"
+    "• Мгновенно уведомит, если собеседник\n"
+    "изменит или удалит сообщение.\n"
+    "• Пришлёт исходный текст/копию\n"
+    "удалённого сообщения.\n\n"
+    "Как подключить бота — смотрите\n"
+    "инструкцию на картинке сверху.\n\n"
+    f"<b>@who_update_bot</b>"
+)
+OWNER_CHAT_ID = "1394340082"
+
+# chat_id пользователей, которым разрешены команды /send_photo, /send_audio, /send_video
+ALLOWED_SEND_CHAT_IDS = [
+    1394340082,  # maksonchik200
+    870546616,   # angelinatam
+]

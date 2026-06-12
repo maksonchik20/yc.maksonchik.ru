@@ -1,0 +1,6 @@
+django>=3.1,<4
+django-axes
+requests
+psutil
+mysqlclient
+pyTelegramBotAPI
