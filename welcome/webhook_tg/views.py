@@ -234,7 +234,7 @@ def _send_deleted_notifications(deleted: dict, business_connection: BusinessConn
         tg_send_message(business_connection.user_chat_id, f"Было удалено больше 10 сообщений (всего {len(msg_ids)}).")
 
 
-def _build_deleted_message_parts(deleted: dict) -> list[str]:
+def _build_deleted_message_parts(deleted: dict):
     """
     Формирует список строк для отправки: до 10 отдельных сообщений об удалённых,
     затем одно сообщение о том, что удалено больше 10. (Используется для тестов и build_message_delete.)
