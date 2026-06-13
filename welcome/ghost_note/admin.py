@@ -9,10 +9,10 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
     list_display = ('token_preview', 'label', 'expires_at', 'is_active', 'last_used_at', 'created_at')
     list_filter = ('is_active',)
     search_fields = ('token', 'label')
-    readonly_fields = ('token', 'created_at', 'last_used_at')
+    readonly_fields = ('token', 'created_at', 'last_used_at', 'viewer_link')
     fieldsets = (
         (None, {
-            'fields': ('label', 'token', 'expires_at', 'is_active'),
+            'fields': ('label', 'token', 'expires_at', 'is_active', 'viewer_link'),
         }),
         ('Служебное', {
             'fields': ('created_at', 'last_used_at'),
@@ -23,6 +23,15 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
         return f'{obj.token[:12]}…'
 
     token_preview.short_description = 'Токен'
+
+    def viewer_link(self, obj):
+        from urllib.parse import quote
+
+        if not obj.token:
+            return '—'
+        return f'/ghost/viewer/?token={quote(obj.token, safe="")}'
+
+    viewer_link.short_description = 'Ссылка viewer'
 
     def get_changeform_initial_data(self, request):
         initial = super().get_changeform_initial_data(request)

@@ -7,7 +7,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from .auth import (
+    build_viewer_url,
     format_expires_at,
+    get_or_create_session_for_token,
     get_token_from_request,
     session_token_valid,
     validate_access_token,
@@ -94,6 +96,19 @@ def validate_token(request):
     return JsonResponse({
         'ok': True,
         'expires_at': format_expires_at(expires_at),
+    })
+
+
+@require_GET
+def viewer_by_token(request):
+    token_str = request.GET.get('token', '').strip()
+    token, error, expires_at = validate_access_token(token_str)
+    if token is None:
+        return _auth_error_response(error, expires_at)
+
+    session = get_or_create_session_for_token(token)
+    return render(request, 'ghost_note/viewer.html', {
+        'session_id': session.session_id,
     })
 
 
@@ -212,8 +227,11 @@ def register_session(request):
     if denied is not None:
         return denied
 
-    session = GhostSession.objects.create(access_token=token)
-    return JsonResponse({'session_id': str(session.session_id)})
+    session = get_or_create_session_for_token(token)
+    return JsonResponse({
+        'session_id': str(session.session_id),
+        'viewer_url': build_viewer_url(request, token.token),
+    })
 
 
 @csrf_exempt

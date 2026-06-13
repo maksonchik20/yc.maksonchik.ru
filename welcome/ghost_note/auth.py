@@ -1,6 +1,11 @@
+import uuid
+
 from django.utils import timezone
 
-from .models import GhostAccessToken
+from .models import GhostAccessToken, GhostSession
+
+
+GHOST_SESSION_NAMESPACE = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
 def format_expires_at(dt):
@@ -50,3 +55,30 @@ def get_token_from_request(request):
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
     return (token or '').strip()
+
+
+def session_id_for_access_token(token_str):
+    token_str = (token_str or '').strip()
+    return str(uuid.uuid5(GHOST_SESSION_NAMESPACE, f'ghost-note:{token_str}'))
+
+
+def get_or_create_session_for_token(access_token):
+    canonical_id = session_id_for_access_token(access_token.token)
+    session, created = GhostSession.objects.get_or_create(
+        session_id=canonical_id,
+        defaults={'access_token': access_token},
+    )
+    if not created and session.access_token_id != access_token.id:
+        session.access_token = access_token
+        session.save(update_fields=['access_token'])
+    return session
+
+
+def build_viewer_url(request, token_str):
+    from urllib.parse import quote
+
+    from django.urls import reverse
+
+    token_str = (token_str or '').strip()
+    path = reverse('ghost_viewer_token') + '?token=' + quote(token_str, safe='')
+    return request.build_absolute_uri(path)
