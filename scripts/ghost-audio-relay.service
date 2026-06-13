@@ -1,0 +1,19 @@
+[Unit]
+Description=Ghost Note audio WebSocket relay
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/usr/share/django-projects/welcome
+Environment=GHOST_PROJECT_DIR=/usr/share/django-projects/welcome
+Environment=DJANGO_SETTINGS_MODULE=welcome.settings
+Environment=GHOST_AUDIO_RELAY_HOST=127.0.0.1
+Environment=GHOST_AUDIO_RELAY_PORT=8767
+ExecStart=/usr/share/django-projects/welcome/venv/bin/python /usr/share/django-projects/scripts/ghost_audio_relay.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

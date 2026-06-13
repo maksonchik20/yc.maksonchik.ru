@@ -2,3 +2,4 @@ django
 dataclasses
 openai
 pillow
+websockets>=10,<13

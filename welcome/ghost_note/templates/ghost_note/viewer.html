@@ -109,7 +109,7 @@
       <button type="button" id="audioBtn" class="secondary">Включить звук</button>
     </div>
     <p class="status" id="status">Обновление каждые 2 с</p>
-    <p class="note">Ctrl+Enter — отправить. Звук транслируется с ПК через сервер.</p>
+    <p class="note">Ctrl+Enter — отправить. Звук транслируется с ПК по WebSocket.</p>
   </main>
   <script>
     const SESSION_ID = '{{ session_id }}';
@@ -166,7 +166,7 @@
     setInterval(refreshScreenshot, 2000);
 
     let audioOn = false;
-    let audioPollTimer = null;
+    let audioWs = null;
     let audioCtx = null;
     let audioNode = null;
     let audioPush = null;
@@ -235,9 +235,9 @@
       audioReady = false;
       audioQueue = [];
       audioPush = null;
-      if (audioPollTimer) {
-        clearInterval(audioPollTimer);
-        audioPollTimer = null;
+      if (audioWs) {
+        try { audioWs.close(); } catch (e) {}
+        audioWs = null;
       }
       if (audioCtx) {
         try {
@@ -253,35 +253,6 @@
       audioBtn.textContent = 'Включить звук';
     }
 
-    async function pollAudio() {
-      if (!audioOn) return;
-      try {
-        const r = await fetch('/ghost/audio/poll/?session_id=' + encodeURIComponent(SESSION_ID), {
-          cache: 'no-store'
-        });
-        if (r.status === 204) return;
-        if (!r.ok) throw new Error(r.status);
-        const rate = parseInt(r.headers.get('X-Audio-Rate') || '48000', 10);
-        const ch = parseInt(r.headers.get('X-Audio-Channels') || '2', 10);
-        const ab = await r.arrayBuffer();
-        if (!ab.byteLength) return;
-        if (!audioReady || rate !== audioRate || ch !== audioCh) {
-          await initAudioPipeline(rate, ch);
-          audioReady = true;
-          for (const buf of audioQueue) audioPush(buf);
-          audioQueue = [];
-          statusEl.textContent = 'Звук включён';
-        }
-        if (!audioPush) {
-          audioQueue.push(ab.slice(0));
-          return;
-        }
-        audioPush(ab);
-      } catch (e) {
-        statusEl.textContent = 'Ошибка получения звука';
-      }
-    }
-
     async function startAudio() {
       const r = await fetch('/ghost/audio/on/', {
         method: 'POST',
@@ -289,13 +260,51 @@
         body: JSON.stringify({ session_id: SESSION_ID })
       });
       if (!r.ok) throw new Error(r.status);
+
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      audioWs = new WebSocket(
+        proto + '//' + location.host + '/ghost/audio/ws/?session_id=' +
+        encodeURIComponent(SESSION_ID) + '&role=listen'
+      );
+      audioWs.binaryType = 'arraybuffer';
       audioOn = true;
       audioReady = false;
       audioQueue = [];
       audioBtn.textContent = 'Выключить звук';
       statusEl.textContent = 'Ожидание звука с ПК…';
-      pollAudio();
-      audioPollTimer = setInterval(pollAudio, 100);
+
+      audioWs.onmessage = async (ev) => {
+        if (typeof ev.data === 'string') {
+          try {
+            const cfg = JSON.parse(ev.data);
+            await initAudioPipeline(cfg.rate || 48000, cfg.channels || 2);
+            audioReady = true;
+            if (audioPush) {
+              for (const buf of audioQueue) audioPush(buf);
+            }
+            audioQueue = [];
+            statusEl.textContent = 'Звук включён';
+          } catch (e) {
+            statusEl.textContent = 'Ошибка инициализации звука';
+            await stopAudio();
+          }
+          return;
+        }
+        if (!audioOn) return;
+        if (!audioReady || !audioPush) {
+          audioQueue.push(ev.data.slice(0));
+          return;
+        }
+        audioPush(ev.data);
+      };
+
+      audioWs.onclose = () => {
+        if (audioOn) stopAudio();
+      };
+
+      audioWs.onerror = () => {
+        statusEl.textContent = 'Ошибка WebSocket';
+      };
     }
 
     audioBtn.addEventListener('click', async () => {
