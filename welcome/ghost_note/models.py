@@ -1,8 +1,12 @@
 import secrets
+import string
 import uuid
 
 from django.db import models
 from django.utils import timezone
+
+ACCESS_TOKEN_LENGTH = 6
+ACCESS_TOKEN_ALPHABET = string.ascii_uppercase + string.digits
 
 
 def new_session_id():
@@ -10,11 +14,24 @@ def new_session_id():
 
 
 def generate_access_token():
-    return secrets.token_urlsafe(24)
+    for _ in range(64):
+        token = ''.join(
+            secrets.choice(ACCESS_TOKEN_ALPHABET)
+            for _ in range(ACCESS_TOKEN_LENGTH)
+        )
+        if not GhostAccessToken.objects.filter(token=token).exists():
+            return token
+    raise RuntimeError('Unable to generate a unique access token')
 
 
 class GhostAccessToken(models.Model):
-    token = models.CharField(max_length=64, unique=True, default=generate_access_token, editable=False)
+    token = models.CharField(
+        max_length=64,
+        unique=True,
+        default=generate_access_token,
+        editable=False,
+        verbose_name='Токен',
+    )
     label = models.CharField(max_length=128, blank=True, verbose_name='Заметка')
     expires_at = models.DateTimeField(verbose_name='Действителен до')
     is_active = models.BooleanField(default=True, verbose_name='Активен')
@@ -27,7 +44,7 @@ class GhostAccessToken(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        label = self.label or self.token[:8]
+        label = self.label or self.token
         return f'{label} (до {self.expires_at:%d.%m.%Y %H:%M})'
 
     @property

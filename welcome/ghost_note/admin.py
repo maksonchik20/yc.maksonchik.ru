@@ -20,7 +20,7 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
     )
 
     def token_preview(self, obj):
-        return f'{obj.token[:12]}…'
+        return obj.token
 
     token_preview.short_description = 'Токен'
 
