@@ -1,13 +1,41 @@
 from django.contrib import admin
+from django.utils import timezone
 
-from .models import GhostSession, GhostTextMessage
+from .models import GhostAccessToken, GhostSession, GhostTextMessage
+
+
+@admin.register(GhostAccessToken)
+class GhostAccessTokenAdmin(admin.ModelAdmin):
+    list_display = ('token_preview', 'label', 'expires_at', 'is_active', 'last_used_at', 'created_at')
+    list_filter = ('is_active',)
+    search_fields = ('token', 'label')
+    readonly_fields = ('token', 'created_at', 'last_used_at')
+    fieldsets = (
+        (None, {
+            'fields': ('label', 'token', 'expires_at', 'is_active'),
+        }),
+        ('Служебное', {
+            'fields': ('created_at', 'last_used_at'),
+        }),
+    )
+
+    def token_preview(self, obj):
+        return f'{obj.token[:12]}…'
+
+    token_preview.short_description = 'Токен'
+
+    def get_changeform_initial_data(self, request):
+        initial = super().get_changeform_initial_data(request)
+        initial.setdefault('expires_at', timezone.now() + timezone.timedelta(days=7))
+        return initial
 
 
 @admin.register(GhostSession)
 class GhostSessionAdmin(admin.ModelAdmin):
-    list_display = ('session_id', 'screenshot_updated_at', 'created_at')
+    list_display = ('session_id', 'access_token', 'screenshot_updated_at', 'created_at')
     readonly_fields = ('session_id', 'created_at', 'updated_at', 'screenshot_updated_at')
     search_fields = ('session_id',)
+    list_filter = ('access_token',)
 
 
 @admin.register(GhostTextMessage)
