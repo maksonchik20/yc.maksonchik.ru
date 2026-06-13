@@ -188,7 +188,9 @@
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       const chunks = [];
       let total = 0;
-      const maxSamples = () => Math.floor(audioCtx.sampleRate * audioCh * 0.45);
+      let playPrimed = false;
+      const primedSamples = () => Math.floor(audioCtx.sampleRate * audioCh * 0.12);
+      const maxSamples = () => Math.floor(audioCtx.sampleRate * audioCh * 0.6);
       audioPush = (ab) => {
         const f32 = new Float32Array(ab);
         if (!f32.length) return;
@@ -208,23 +210,33 @@
         const need = frames * ch;
         const outs = [];
         for (let c = 0; c < ch; c++) outs.push(out.getChannelData(c));
-        if (total < need) {
+        if (!playPrimed) {
+          if (total < primedSamples()) {
+            for (let c = 0; c < ch; c++) outs[c].fill(0);
+            return;
+          }
+          playPrimed = true;
+        }
+        if (total === 0) {
           for (let c = 0; c < ch; c++) outs[c].fill(0);
           return;
         }
-        const merged = new Float32Array(need);
+        const takeTotal = Math.min(need, total);
+        const merged = new Float32Array(takeTotal);
         let off = 0;
-        while (off < need) {
+        while (off < takeTotal) {
           const chunk = chunks[0];
-          const take = Math.min(need - off, chunk.length);
+          const take = Math.min(takeTotal - off, chunk.length);
           merged.set(chunk.subarray(0, take), off);
           if (take === chunk.length) chunks.shift();
           else chunks[0] = chunk.subarray(take);
           off += take;
         }
-        total -= need;
+        total -= takeTotal;
         for (let i = 0; i < frames; i++) {
-          for (let c = 0; c < ch; c++) outs[c][i] = merged[i * ch + c];
+          for (let c = 0; c < ch; c++) {
+            outs[c][i] = i * ch + c < takeTotal ? merged[i * ch + c] : 0;
+          }
         }
       };
       audioNode.connect(audioCtx.destination);
