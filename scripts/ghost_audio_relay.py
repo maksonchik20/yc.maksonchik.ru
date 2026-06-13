@@ -139,7 +139,7 @@ async def handler(websocket, path):
         room.sinks.add(websocket)
         LOG.info('listener joined %s (sinks=%d)', session_id, len(room.sinks))
         cfg = room.last_config
-        if cfg is None and room.source is not None:
+        if cfg is None and (room.source is not None or room.bytes_forwarded > 0):
             cfg = DEFAULT_AUDIO_CFG
         if cfg:
             try:
