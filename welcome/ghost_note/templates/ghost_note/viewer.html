@@ -175,33 +175,94 @@
     let audioReady = false;
     let audioQueue = [];
 
+    function resampleInterleaved(input, srcRate, dstRate, channels) {
+      if (srcRate === dstRate || !input.length) return input;
+      const inFrames = input.length / channels;
+      const outFrames = Math.max(1, Math.round(inFrames * dstRate / srcRate));
+      const out = new Float32Array(outFrames * channels);
+      for (let i = 0; i < outFrames; i++) {
+        const srcPos = i * srcRate / dstRate;
+        const i0 = Math.min(Math.floor(srcPos), inFrames - 1);
+        const i1 = Math.min(i0 + 1, inFrames - 1);
+        const frac = srcPos - i0;
+        for (let c = 0; c < channels; c++) {
+          const s0 = input[i0 * channels + c];
+          const s1 = input[i1 * channels + c];
+          out[i * channels + c] = s0 + (s1 - s0) * frac;
+        }
+      }
+      return out;
+    }
+
+    function createAudioRing(capacity) {
+      const buf = new Float32Array(capacity);
+      let write = 0;
+      let read = 0;
+      let count = 0;
+      return {
+        reset() {
+          write = read = count = 0;
+        },
+        available() {
+          return count;
+        },
+        push(data) {
+          for (let i = 0; i < data.length; i++) {
+            if (count >= capacity) {
+              read = (read + 1) % capacity;
+              count--;
+            }
+            buf[write] = data[i];
+            write = (write + 1) % capacity;
+            count++;
+          }
+        },
+        readInto(target, samples) {
+          const got = Math.min(samples, count);
+          for (let i = 0; i < got; i++) {
+            target[i] = buf[read];
+            read = (read + 1) % capacity;
+          }
+          count -= got;
+          return got;
+        }
+      };
+    }
+
+    function sameAudioConfig(rate, channels) {
+      return audioCtx && audioReady &&
+        audioRate === (rate || 48000) && audioCh === (channels || 2);
+    }
+
     async function initAudioPipeline(rate, channels) {
+      const nextRate = rate || 48000;
+      const nextCh = channels || 2;
+      if (sameAudioConfig(nextRate, nextCh)) return;
       if (audioCtx) {
         try { await audioCtx.close(); } catch (e) {}
         audioCtx = null;
         audioNode = null;
         audioPush = null;
       }
-      audioRate = rate || 48000;
-      audioCh = channels || 2;
+      audioRate = nextRate;
+      audioCh = nextCh;
       audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioRate });
       if (audioCtx.state === 'suspended') await audioCtx.resume();
-      const chunks = [];
-      let total = 0;
+      const streamRate = audioRate;
+      const ctxRate = audioCtx.sampleRate;
+      const ring = createAudioRing(Math.floor(ctxRate * audioCh * 2.0));
       let playPrimed = false;
-      const primedSamples = () => Math.floor(audioCtx.sampleRate * audioCh * 0.12);
-      const maxSamples = () => Math.floor(audioCtx.sampleRate * audioCh * 0.6);
+      const primedSamples = () => Math.floor(ctxRate * audioCh * 0.25);
       audioPush = (ab) => {
-        const f32 = new Float32Array(ab);
+        let f32 = new Float32Array(ab);
         if (!f32.length) return;
-        chunks.push(f32);
-        total += f32.length;
-        while (total > maxSamples() && chunks.length) {
-          const d = chunks.shift();
-          total -= d.length;
+        if (streamRate !== ctxRate) {
+          f32 = resampleInterleaved(f32, streamRate, ctxRate, audioCh);
         }
+        ring.push(f32);
       };
-      const bufferSize = 2048;
+      const bufferSize = 4096;
+      const scratch = new Float32Array(bufferSize * audioCh);
       audioNode = audioCtx.createScriptProcessor(bufferSize, 0, audioCh);
       audioNode.onaudioprocess = (e) => {
         const out = e.outputBuffer;
@@ -211,31 +272,17 @@
         const outs = [];
         for (let c = 0; c < ch; c++) outs.push(out.getChannelData(c));
         if (!playPrimed) {
-          if (total < primedSamples()) {
+          if (ring.available() < primedSamples()) {
             for (let c = 0; c < ch; c++) outs[c].fill(0);
             return;
           }
           playPrimed = true;
         }
-        if (total === 0) {
-          for (let c = 0; c < ch; c++) outs[c].fill(0);
-          return;
-        }
-        const takeTotal = Math.min(need, total);
-        const merged = new Float32Array(takeTotal);
-        let off = 0;
-        while (off < takeTotal) {
-          const chunk = chunks[0];
-          const take = Math.min(takeTotal - off, chunk.length);
-          merged.set(chunk.subarray(0, take), off);
-          if (take === chunk.length) chunks.shift();
-          else chunks[0] = chunk.subarray(take);
-          off += take;
-        }
-        total -= takeTotal;
+        const got = ring.readInto(scratch, need);
         for (let i = 0; i < frames; i++) {
           for (let c = 0; c < ch; c++) {
-            outs[c][i] = i * ch + c < takeTotal ? merged[i * ch + c] : 0;
+            const idx = i * ch + c;
+            outs[c][i] = idx < got ? scratch[idx] : 0;
           }
         }
       };
@@ -289,6 +336,9 @@
         if (typeof ev.data === 'string') {
           try {
             const cfg = JSON.parse(ev.data);
+            if (sameAudioConfig(cfg.rate || 48000, cfg.channels || 2)) {
+              return;
+            }
             await initAudioPipeline(cfg.rate || 48000, cfg.channels || 2);
             audioReady = true;
             if (audioPush) {
