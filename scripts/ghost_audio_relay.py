@@ -168,9 +168,13 @@ async def handler(websocket, path):
 
     room = get_room(session_id)
     if room.source is not None:
-        LOG.info('uploader rejected %s: uploader busy', session_id)
-        await websocket.close(code=1008, reason='uploader busy')
-        return
+        LOG.info('uploader %s replacing previous connection', session_id)
+        old = room.source
+        room.source = None
+        try:
+            await old.close(code=1000, reason='replaced')
+        except Exception:
+            pass
 
     room.source = websocket
     LOG.info('uploader joined %s', session_id)
