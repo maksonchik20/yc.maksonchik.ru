@@ -46,6 +46,8 @@ class Room:
         self.bytes_forwarded = 0
 
 
+DEFAULT_AUDIO_CFG = '{"rate":48000,"channels":2,"format":"f32le"}'
+
 ROOMS = {}
 
 
@@ -137,6 +139,8 @@ async def handler(websocket, path):
         room.sinks.add(websocket)
         LOG.info('listener joined %s (sinks=%d)', session_id, len(room.sinks))
         cfg = room.last_config
+        if cfg is None and room.source is not None:
+            cfg = DEFAULT_AUDIO_CFG
         if cfg:
             try:
                 await websocket.send(cfg)
@@ -166,6 +170,7 @@ async def handler(websocket, path):
         async for message in websocket:
             if isinstance(message, str):
                 room.last_config = message
+                LOG.info('uploader %s text (%d bytes)', session_id, len(message))
             elif isinstance(message, bytes) and message.startswith(b'{'):
                 try:
                     room.last_config = message.decode('utf-8')
@@ -195,7 +200,7 @@ async def main():
     )
     LOG.info('starting on %s:%s', HOST, PORT)
     async with websockets.serve(
-        handler, HOST, PORT, max_size=2 ** 20, ping_interval=20, ping_timeout=60
+        handler, HOST, PORT, max_size=2 ** 20, ping_interval=None
     ):
         await asyncio.Future()
 
