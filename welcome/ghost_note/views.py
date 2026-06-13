@@ -14,6 +14,8 @@ from .auth import (
 )
 from .models import GhostSession, GhostTextMessage
 
+JSON_UTF8 = {'ensure_ascii': False}
+
 
 def _auth_error_response(error, expires_at=None, status=401):
     payload = {'ok': False, 'error': error}
@@ -199,7 +201,7 @@ def poll_text(request):
     if pending:
         GhostTextMessage.objects.filter(pk__in=[m.pk for m in pending]).update(delivered=True)
 
-    return JsonResponse({'messages': messages})
+    return JsonResponse({'messages': messages}, json_dumps_params=JSON_UTF8)
 
 
 @csrf_exempt
