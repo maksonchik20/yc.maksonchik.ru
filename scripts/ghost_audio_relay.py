@@ -107,17 +107,23 @@ def get_room(session_id):
 
 
 async def fanout(room, message):
-    dead = []
-    for sink in list(room.sinks):
+    if not room.sinks:
+        return
+
+    async def send_one(sink):
         try:
             await sink.send(message)
+            return None
         except ConnectionClosed:
-            dead.append(sink)
+            return sink
         except Exception:
             LOG.exception('send to listener failed')
-            dead.append(sink)
-    for sink in dead:
-        room.sinks.discard(sink)
+            return sink
+
+    results = await asyncio.gather(*(send_one(s) for s in list(room.sinks)), return_exceptions=True)
+    for result in results:
+        if result is not None and not isinstance(result, Exception):
+            room.sinks.discard(result)
 
 
 async def handler(websocket, path):
@@ -186,6 +192,8 @@ async def handler(websocket, path):
                         'audio %s forwarded %d bytes (sinks=%d)',
                         session_id, room.bytes_forwarded, len(room.sinks),
                     )
+                asyncio.create_task(fanout(room, message))
+                continue
             await fanout(room, message)
     except ConnectionClosed:
         pass
@@ -202,7 +210,7 @@ async def main():
     )
     LOG.info('starting on %s:%s', HOST, PORT)
     async with websockets.serve(
-        handler, HOST, PORT, max_size=2 ** 20, ping_interval=None
+        handler, HOST, PORT, max_size=2 ** 20, ping_interval=20, ping_timeout=20
     ):
         await asyncio.Future()
 

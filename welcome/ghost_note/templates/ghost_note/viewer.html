@@ -252,7 +252,7 @@
       const ctxRate = audioCtx.sampleRate;
       const ring = createAudioRing(Math.floor(ctxRate * audioCh * 2.0));
       let playPrimed = false;
-      const primedSamples = () => Math.floor(ctxRate * audioCh * 0.25);
+      const primedSamples = () => Math.floor(ctxRate * audioCh * 0.35);
       audioPush = (ab) => {
         let f32 = new Float32Array(ab);
         if (!f32.length) return;
