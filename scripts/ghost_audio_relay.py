@@ -47,6 +47,8 @@ class Room:
 
 DEFAULT_AUDIO_CFG = '{"rate":48000,"channels":2,"format":"f32le"}'
 
+ROOMS = {}
+
 
 def _get_session(session_id):
     session_id = (session_id or '').strip()
