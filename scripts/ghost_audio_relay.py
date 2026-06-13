@@ -20,6 +20,8 @@ import django  # noqa: E402
 
 django.setup()
 
+from asgiref.sync import sync_to_async  # noqa: E402
+
 from ghost_note.auth import session_token_valid, validate_access_token  # noqa: E402
 from ghost_note.models import GhostSession  # noqa: E402
 
@@ -46,7 +48,7 @@ class Room:
 ROOMS = {}
 
 
-def get_session(session_id):
+def _get_session(session_id):
     session_id = (session_id or '').strip()
     if not session_id:
         return None
@@ -54,6 +56,43 @@ def get_session(session_id):
         return GhostSession.objects.get(session_id=session_id)
     except GhostSession.DoesNotExist:
         return None
+
+
+def _validate_listener(session_id):
+    session = _get_session(session_id)
+    if session is None:
+        return None, 'invalid session'
+    if not session_token_valid(session):
+        return None, 'session expired'
+    if not session.audio_enabled:
+        return None, 'audio off'
+    return session, None
+
+
+def _validate_uploader(session_id, token):
+    session = _get_session(session_id)
+    if session is None:
+        return None, 'invalid session'
+    if not session_token_valid(session):
+        return None, 'session expired'
+
+    token_obj, error, _expires = validate_access_token(token)
+    if token_obj is None:
+        return None, error or 'unauthorized'
+
+    if session.access_token_id and session.access_token_id != token_obj.id:
+        return None, 'unauthorized'
+
+    session.refresh_from_db(fields=['audio_enabled'])
+    if not session.audio_enabled:
+        return None, 'audio off'
+
+    return session, None
+
+
+get_session = sync_to_async(_get_session, thread_sensitive=True)
+validate_listener = sync_to_async(_validate_listener, thread_sensitive=True)
+validate_uploader = sync_to_async(_validate_uploader, thread_sensitive=True)
 
 
 def get_room(session_id):
@@ -84,22 +123,15 @@ async def handler(websocket, path):
     session_id = (query.get('session_id') or [''])[0].strip()
     role = (query.get('role') or [''])[0].strip().lower()
 
-    session = get_session(session_id)
-    if session is None:
-        await websocket.close(code=1008, reason='invalid session')
-        return
-
-    if not session_token_valid(session):
-        await websocket.close(code=1008, reason='session expired')
-        return
-
     token = (websocket.request_headers.get('X-Access-Token') or '').strip()
     is_listener = role == 'listen' or not token
 
     if is_listener:
-        if not session.audio_enabled:
-            await websocket.close(code=1008, reason='audio off')
+        _session, error = await validate_listener(session_id)
+        if error:
+            await websocket.close(code=1008, reason=error)
             return
+
         room = get_room(session_id)
         room.sinks.add(websocket)
         LOG.info('listener joined %s (sinks=%d)', session_id, len(room.sinks))
@@ -116,18 +148,9 @@ async def handler(websocket, path):
             LOG.info('listener left %s (sinks=%d)', session_id, len(room.sinks))
         return
 
-    token_obj, error, _expires = validate_access_token(token)
-    if token_obj is None:
-        await websocket.close(code=1008, reason=error or 'unauthorized')
-        return
-
-    if session.access_token_id and session.access_token_id != token_obj.id:
-        await websocket.close(code=1008, reason='unauthorized')
-        return
-
-    session.refresh_from_db(fields=['audio_enabled'])
-    if not session.audio_enabled:
-        await websocket.close(code=1008, reason='audio off')
+    _session, error = await validate_uploader(session_id, token)
+    if error:
+        await websocket.close(code=1008, reason=error)
         return
 
     room = get_room(session_id)
