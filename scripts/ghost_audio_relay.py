@@ -45,7 +45,7 @@ class Room:
         self.last_config = None
 
 
-ROOMS = {}
+DEFAULT_AUDIO_CFG = '{"rate":48000,"channels":2,"format":"f32le"}'
 
 
 def _get_session(session_id):
@@ -135,9 +135,12 @@ async def handler(websocket, path):
         room = get_room(session_id)
         room.sinks.add(websocket)
         LOG.info('listener joined %s (sinks=%d)', session_id, len(room.sinks))
-        if room.last_config:
+        cfg = room.last_config
+        if cfg is None and room.source is not None:
+            cfg = DEFAULT_AUDIO_CFG
+        if cfg:
             try:
-                await websocket.send(room.last_config)
+                await websocket.send(cfg)
             except ConnectionClosed:
                 room.sinks.discard(websocket)
                 return
@@ -164,6 +167,12 @@ async def handler(websocket, path):
         async for message in websocket:
             if isinstance(message, str):
                 room.last_config = message
+            elif isinstance(message, bytes) and message.startswith(b'{'):
+                try:
+                    room.last_config = message.decode('utf-8')
+                    message = room.last_config
+                except UnicodeDecodeError:
+                    pass
             await fanout(room, message)
     except ConnectionClosed:
         pass
@@ -179,7 +188,9 @@ async def main():
         format='%(asctime)s %(levelname)s %(message)s',
     )
     LOG.info('starting on %s:%s', HOST, PORT)
-    async with websockets.serve(handler, HOST, PORT, max_size=2 ** 20):
+    async with websockets.serve(
+        handler, HOST, PORT, max_size=2 ** 20, ping_interval=20, ping_timeout=60
+    ):
         await asyncio.Future()
 
 

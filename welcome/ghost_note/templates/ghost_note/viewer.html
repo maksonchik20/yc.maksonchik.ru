@@ -292,14 +292,26 @@
         }
         if (!audioOn) return;
         if (!audioReady || !audioPush) {
+          await initAudioPipeline(48000, 2);
+          audioReady = true;
+          statusEl.textContent = 'Звук включён';
+        }
+        if (!audioPush) {
           audioQueue.push(ev.data.slice(0));
           return;
         }
         audioPush(ev.data);
       };
 
+      audioWs.onopen = () => {
+        statusEl.textContent = 'WebSocket подключён, ожидание ПК…';
+      };
+
       audioWs.onclose = () => {
-        if (audioOn) stopAudio();
+        if (audioOn) {
+          statusEl.textContent = 'Соединение звука разорвано';
+          stopAudio();
+        }
       };
 
       audioWs.onerror = () => {
