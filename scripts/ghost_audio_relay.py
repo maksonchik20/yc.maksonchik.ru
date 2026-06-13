@@ -191,12 +191,12 @@ async def handler(websocket, path):
                     pass
             elif isinstance(message, bytes):
                 room.bytes_forwarded += len(message)
-                if room.bytes_forwarded <= len(message) or room.bytes_forwarded % (256 * 1024) < len(message):
+                if room.bytes_forwarded <= len(message) or room.bytes_forwarded % (64 * 1024) < len(message):
                     LOG.info(
                         'audio %s forwarded %d bytes (sinks=%d)',
                         session_id, room.bytes_forwarded, len(room.sinks),
                     )
-                asyncio.create_task(fanout(room, message))
+                await fanout(room, message)
                 continue
             await fanout(room, message)
     except ConnectionClosed:
@@ -214,7 +214,7 @@ async def main():
     )
     LOG.info('starting on %s:%s', HOST, PORT)
     async with websockets.serve(
-        handler, HOST, PORT, max_size=2 ** 20, ping_interval=20, ping_timeout=20
+        handler, HOST, PORT, max_size=2 ** 20, ping_interval=None
     ):
         await asyncio.Future()
 
