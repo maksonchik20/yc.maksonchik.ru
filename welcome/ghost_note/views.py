@@ -12,6 +12,7 @@ from .auth import (
     session_token_valid,
     validate_access_token,
 )
+from .audio_store import append_audio, clear_audio, poll_audio as consume_audio
 from .models import GhostSession, GhostTextMessage
 
 JSON_UTF8 = {'ensure_ascii': False}
@@ -213,3 +214,128 @@ def register_session(request):
 
     session = GhostSession.objects.create(access_token=token)
     return JsonResponse({'session_id': str(session.session_id)})
+
+
+@csrf_exempt
+@require_POST
+def audio_on(request):
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    session_id = payload.get('session_id', '')
+    session = _get_session(session_id)
+    if session is None:
+        return JsonResponse({'error': 'invalid session_id'}, status=404)
+
+    denied = _require_session_access(session)
+    if denied is not None:
+        return denied
+
+    session.audio_enabled = True
+    session.save(update_fields=['audio_enabled', 'updated_at'])
+    return JsonResponse({'ok': True})
+
+
+@csrf_exempt
+@require_POST
+def audio_off(request):
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return JsonResponse({'error': 'invalid json'}, status=400)
+
+    session_id = payload.get('session_id', '')
+    session = _get_session(session_id)
+    if session is None:
+        return JsonResponse({'error': 'invalid session_id'}, status=404)
+
+    denied = _require_session_access(session)
+    if denied is not None:
+        return denied
+
+    session.audio_enabled = False
+    session.save(update_fields=['audio_enabled', 'updated_at'])
+    clear_audio(str(session.session_id))
+    return JsonResponse({'ok': True})
+
+
+@require_GET
+def audio_status(request):
+    token, denied = _require_valid_token(request)
+    if denied is not None:
+        return denied
+
+    session_id = request.GET.get('session_id', '')
+    session = _get_session(session_id)
+    if session is None:
+        return JsonResponse({'error': 'invalid session_id'}, status=404)
+
+    denied = _require_session_access(session, token=token)
+    if denied is not None:
+        return denied
+
+    return JsonResponse({'enabled': session.audio_enabled})
+
+
+@csrf_exempt
+@require_POST
+def upload_audio(request):
+    token, denied = _require_valid_token(request)
+    if denied is not None:
+        return denied
+
+    session_id = request.GET.get('session_id') or request.headers.get('X-Session-Id', '')
+    session = _get_session(session_id)
+    if session is None:
+        return JsonResponse({'error': 'invalid session_id'}, status=404)
+
+    denied = _require_session_access(session, token=token)
+    if denied is not None:
+        return denied
+
+    if not session.audio_enabled:
+        return HttpResponse(status=204)
+
+    data = request.body
+    if not data:
+        return JsonResponse({'error': 'empty body'}, status=400)
+    if len(data) > 512 * 1024:
+        return JsonResponse({'error': 'chunk too large'}, status=413)
+
+    rate = request.headers.get('X-Audio-Rate')
+    channels = request.headers.get('X-Audio-Channels')
+    append_audio(
+        str(session.session_id),
+        data,
+        rate=int(rate) if rate and rate.isdigit() else None,
+        channels=int(channels) if channels and channels.isdigit() else None,
+    )
+    return JsonResponse({'ok': True})
+
+
+@require_GET
+def poll_audio(request):
+    session_id = request.GET.get('session_id', '')
+    session = _get_session(session_id)
+    if session is None:
+        return JsonResponse({'error': 'invalid session_id'}, status=404)
+
+    denied = _require_session_access(session)
+    if denied is not None:
+        return denied
+
+    if not session.audio_enabled:
+        return HttpResponse(status=204)
+
+    result = consume_audio(str(session.session_id))
+    if result is None:
+        return HttpResponse(status=204)
+
+    config, data = result
+    resp = HttpResponse(data, content_type='application/octet-stream')
+    resp['X-Audio-Rate'] = str(config.get('rate', 48000))
+    resp['X-Audio-Channels'] = str(config.get('channels', 2))
+    resp['Cache-Control'] = 'no-cache'
+    return resp

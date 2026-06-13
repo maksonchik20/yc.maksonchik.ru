@@ -8,7 +8,7 @@
     * { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
       background: #1a1a2e;
       color: #eee;
       min-height: 100vh;
@@ -45,28 +45,31 @@
       align-items: center;
       justify-content: center;
       min-height: 300px;
+      border: 1px solid #334155;
     }
     .screen-wrap img {
       max-width: 100%;
       max-height: 70vh;
       object-fit: contain;
     }
-    .screen-wrap .placeholder { color: #64748b; }
+    .screen-wrap .placeholder { color: #64748b; padding: 16px; text-align: center; }
     .controls {
       display: flex;
       gap: 8px;
       flex-wrap: wrap;
+      align-items: flex-start;
     }
     textarea {
       flex: 1;
       min-width: 200px;
       min-height: 80px;
-      padding: 10px;
+      padding: 10px 12px;
       border: 1px solid #334155;
       border-radius: 6px;
       background: #0f172a;
       color: #f1f5f9;
       font-size: 1rem;
+      font-family: inherit;
       resize: vertical;
     }
     button {
@@ -77,11 +80,15 @@
       border-radius: 6px;
       font-size: 1rem;
       cursor: pointer;
+      font-family: inherit;
     }
     button:hover { background: #2563eb; }
     button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary { background: #475569; }
+    button.secondary:hover { background: #334155; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
     .status { font-size: 0.85rem; color: #94a3b8; }
-    .note { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+    .note { font-size: 0.8rem; color: #64748b; }
   </style>
 </head>
 <body>
@@ -98,8 +105,11 @@
       <textarea id="text" placeholder="Текст для окна на ПК…"></textarea>
       <button type="button" id="send">Отправить</button>
     </div>
+    <div class="btn-row">
+      <button type="button" id="audioBtn" class="secondary">Включить звук</button>
+    </div>
     <p class="status" id="status">Обновление каждые 2 с</p>
-    <p class="note">Аудио доступно только в локальном режиме на ПК.</p>
+    <p class="note">Ctrl+Enter — отправить. Звук транслируется с ПК через сервер.</p>
   </main>
   <script>
     const SESSION_ID = '{{ session_id }}';
@@ -108,6 +118,7 @@
     const textArea = document.getElementById('text');
     const sendBtn = document.getElementById('send');
     const statusEl = document.getElementById('status');
+    const audioBtn = document.getElementById('audioBtn');
 
     async function refreshScreenshot() {
       try {
@@ -138,7 +149,6 @@
           body: JSON.stringify({ session_id: SESSION_ID, text: text })
         });
         if (!r.ok) throw new Error(r.status);
-        textArea.value = '';
         statusEl.textContent = 'Текст отправлен';
       } catch (e) {
         statusEl.textContent = 'Ошибка отправки текста';
@@ -154,6 +164,157 @@
 
     refreshScreenshot();
     setInterval(refreshScreenshot, 2000);
+
+    let audioOn = false;
+    let audioPollTimer = null;
+    let audioCtx = null;
+    let audioNode = null;
+    let audioPush = null;
+    let audioCh = 2;
+    let audioRate = 48000;
+    let audioReady = false;
+    let audioQueue = [];
+
+    async function initAudioPipeline(rate, channels) {
+      if (audioCtx) {
+        try { await audioCtx.close(); } catch (e) {}
+        audioCtx = null;
+        audioNode = null;
+        audioPush = null;
+      }
+      audioRate = rate || 48000;
+      audioCh = channels || 2;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioRate });
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      const chunks = [];
+      let total = 0;
+      const maxSamples = () => Math.floor(audioCtx.sampleRate * audioCh * 0.45);
+      audioPush = (ab) => {
+        const f32 = new Float32Array(ab);
+        if (!f32.length) return;
+        chunks.push(f32);
+        total += f32.length;
+        while (total > maxSamples() && chunks.length) {
+          const d = chunks.shift();
+          total -= d.length;
+        }
+      };
+      const bufferSize = 2048;
+      audioNode = audioCtx.createScriptProcessor(bufferSize, 0, audioCh);
+      audioNode.onaudioprocess = (e) => {
+        const out = e.outputBuffer;
+        const ch = out.numberOfChannels;
+        const frames = out.length;
+        const need = frames * ch;
+        const outs = [];
+        for (let c = 0; c < ch; c++) outs.push(out.getChannelData(c));
+        if (total < need) {
+          for (let c = 0; c < ch; c++) outs[c].fill(0);
+          return;
+        }
+        const merged = new Float32Array(need);
+        let off = 0;
+        while (off < need) {
+          const chunk = chunks[0];
+          const take = Math.min(need - off, chunk.length);
+          merged.set(chunk.subarray(0, take), off);
+          if (take === chunk.length) chunks.shift();
+          else chunks[0] = chunk.subarray(take);
+          off += take;
+        }
+        total -= need;
+        for (let i = 0; i < frames; i++) {
+          for (let c = 0; c < ch; c++) outs[c][i] = merged[i * ch + c];
+        }
+      };
+      audioNode.connect(audioCtx.destination);
+    }
+
+    async function stopAudio() {
+      audioOn = false;
+      audioReady = false;
+      audioQueue = [];
+      audioPush = null;
+      if (audioPollTimer) {
+        clearInterval(audioPollTimer);
+        audioPollTimer = null;
+      }
+      if (audioCtx) {
+        try {
+          if (audioNode) {
+            audioNode.onaudioprocess = null;
+            audioNode.disconnect();
+            audioNode = null;
+          }
+          await audioCtx.close();
+        } catch (e) {}
+        audioCtx = null;
+      }
+      audioBtn.textContent = 'Включить звук';
+    }
+
+    async function pollAudio() {
+      if (!audioOn) return;
+      try {
+        const r = await fetch('/ghost/audio/poll/?session_id=' + encodeURIComponent(SESSION_ID), {
+          cache: 'no-store'
+        });
+        if (r.status === 204) return;
+        if (!r.ok) throw new Error(r.status);
+        const rate = parseInt(r.headers.get('X-Audio-Rate') || '48000', 10);
+        const ch = parseInt(r.headers.get('X-Audio-Channels') || '2', 10);
+        const ab = await r.arrayBuffer();
+        if (!ab.byteLength) return;
+        if (!audioReady || rate !== audioRate || ch !== audioCh) {
+          await initAudioPipeline(rate, ch);
+          audioReady = true;
+          for (const buf of audioQueue) audioPush(buf);
+          audioQueue = [];
+          statusEl.textContent = 'Звук включён';
+        }
+        if (!audioPush) {
+          audioQueue.push(ab.slice(0));
+          return;
+        }
+        audioPush(ab);
+      } catch (e) {
+        statusEl.textContent = 'Ошибка получения звука';
+      }
+    }
+
+    async function startAudio() {
+      const r = await fetch('/ghost/audio/on/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: SESSION_ID })
+      });
+      if (!r.ok) throw new Error(r.status);
+      audioOn = true;
+      audioReady = false;
+      audioQueue = [];
+      audioBtn.textContent = 'Выключить звук';
+      statusEl.textContent = 'Ожидание звука с ПК…';
+      pollAudio();
+      audioPollTimer = setInterval(pollAudio, 100);
+    }
+
+    audioBtn.addEventListener('click', async () => {
+      try {
+        if (audioOn) {
+          await fetch('/ghost/audio/off/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: SESSION_ID })
+          });
+          await stopAudio();
+        } else {
+          await startAudio();
+        }
+      } catch (e) {
+        statusEl.textContent = 'Ошибка управления звуком';
+        await stopAudio();
+      }
+    });
   </script>
 </body>
 </html>

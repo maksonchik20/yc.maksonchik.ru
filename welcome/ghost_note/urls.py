@@ -10,4 +10,9 @@ urlpatterns = [
     path('text/', views.post_text, name='ghost_post_text'),
     path('text/poll/', views.poll_text, name='ghost_poll_text'),
     path('session/', views.register_session, name='ghost_register_session'),
+    path('audio/on/', views.audio_on, name='ghost_audio_on'),
+    path('audio/off/', views.audio_off, name='ghost_audio_off'),
+    path('audio/status/', views.audio_status, name='ghost_audio_status'),
+    path('audio/upload/', views.upload_audio, name='ghost_upload_audio'),
+    path('audio/poll/', views.poll_audio, name='ghost_poll_audio'),
 ]

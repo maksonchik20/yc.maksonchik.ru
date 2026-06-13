@@ -46,6 +46,7 @@ class GhostSession(models.Model):
     )
     screenshot = models.BinaryField(null=True, blank=True)
     screenshot_updated_at = models.DateTimeField(null=True, blank=True)
+    audio_enabled = models.BooleanField(default=False, verbose_name='Трансляция звука')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
