@@ -37,15 +37,14 @@ PORT = int(os.environ.get('GHOST_AUDIO_RELAY_PORT', '8767'))
 
 
 class Room:
-    __slots__ = ('source', 'sinks', 'last_config')
+    __slots__ = ('source', 'sinks', 'last_config', 'bytes_forwarded')
 
     def __init__(self):
         self.source = None
         self.sinks = set()
         self.last_config = None
+        self.bytes_forwarded = 0
 
-
-DEFAULT_AUDIO_CFG = '{"rate":48000,"channels":2,"format":"f32le"}'
 
 ROOMS = {}
 
@@ -138,8 +137,6 @@ async def handler(websocket, path):
         room.sinks.add(websocket)
         LOG.info('listener joined %s (sinks=%d)', session_id, len(room.sinks))
         cfg = room.last_config
-        if cfg is None and room.source is not None:
-            cfg = DEFAULT_AUDIO_CFG
         if cfg:
             try:
                 await websocket.send(cfg)
@@ -175,6 +172,13 @@ async def handler(websocket, path):
                     message = room.last_config
                 except UnicodeDecodeError:
                     pass
+            elif isinstance(message, bytes):
+                room.bytes_forwarded += len(message)
+                if room.bytes_forwarded <= len(message) or room.bytes_forwarded % (256 * 1024) < len(message):
+                    LOG.info(
+                        'audio %s forwarded %d bytes (sinks=%d)',
+                        session_id, room.bytes_forwarded, len(room.sinks),
+                    )
             await fanout(room, message)
     except ConnectionClosed:
         pass

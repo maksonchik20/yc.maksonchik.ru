@@ -283,7 +283,7 @@
               for (const buf of audioQueue) audioPush(buf);
             }
             audioQueue = [];
-            statusEl.textContent = 'Звук включён';
+            statusEl.textContent = 'Конфигурация получена, ожидание потока…';
           } catch (e) {
             statusEl.textContent = 'Ошибка инициализации звука';
             await stopAudio();
