@@ -156,11 +156,13 @@ async def handler(websocket, path):
 
     _session, error = await validate_uploader(session_id, token)
     if error:
+        LOG.info('uploader rejected %s: %s', session_id, error)
         await websocket.close(code=1008, reason=error)
         return
 
     room = get_room(session_id)
     if room.source is not None:
+        LOG.info('uploader rejected %s: uploader busy', session_id)
         await websocket.close(code=1008, reason='uploader busy')
         return
 
