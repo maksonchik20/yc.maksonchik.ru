@@ -226,27 +226,13 @@
     }
 
     function makeAudioPushWorklet(node, streamRate, ctxRate, channels) {
-      let pending = new Float32Array(0);
-      const batchSamples = () => Math.max(256, Math.floor(ctxRate * channels * 0.02));
       return (ab) => {
         let f32 = new Float32Array(ab);
         if (!f32.length) return;
         if (streamRate !== ctxRate) {
           f32 = resampleInterleaved(f32, streamRate, ctxRate, channels);
         }
-        if (pending.length) {
-          const merged = new Float32Array(pending.length + f32.length);
-          merged.set(pending);
-          merged.set(f32, pending.length);
-          f32 = merged;
-          pending = new Float32Array(0);
-        }
-        while (f32.length >= batchSamples()) {
-          const chunk = f32.subarray(0, batchSamples());
-          node.port.postMessage(chunk.slice(0));
-          f32 = f32.subarray(batchSamples());
-        }
-        if (f32.length) pending = f32.slice(0);
+        node.port.postMessage(f32);
       };
     }
 
@@ -255,22 +241,21 @@ class GhostAudioProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
     this.ch = (options.processorOptions && options.processorOptions.channels) || 2;
-    this.capacity = Math.max(4096, Math.floor(sampleRate * this.ch * 0.8));
+    this.capacity = Math.max(8192, Math.floor(sampleRate * this.ch * 8.0));
     this.buf = new Float32Array(this.capacity);
     this.w = 0;
     this.r = 0;
     this.count = 0;
     this.primed = false;
-    this.target = Math.floor(sampleRate * this.ch * 0.22);
-    this.hardMax = Math.floor(sampleRate * this.ch * 0.45);
-    this.primeNeed = Math.floor(sampleRate * this.ch * 0.10);
+    this.primeNeed = Math.floor(sampleRate * this.ch * 2.0);
+    this.last = new Float32Array(this.ch);
+    this.hasLast = false;
     this.port.onmessage = (e) => {
       const data = e.data;
       if (data && data.length) this._push(data);
     };
   }
   _push(data) {
-    const ch = this.ch;
     for (let i = 0; i < data.length; i++) {
       if (this.count >= this.capacity) {
         this.r = (this.r + 1) % this.capacity;
@@ -279,14 +264,6 @@ class GhostAudioProcessor extends AudioWorkletProcessor {
       this.buf[this.w] = data[i];
       this.w = (this.w + 1) % this.capacity;
       this.count++;
-    }
-    if (this.count > this.hardMax) {
-      let drop = this.count - this.target;
-      drop -= drop % ch;
-      if (drop > 0) {
-        this.r = (this.r + drop) % this.capacity;
-        this.count -= drop;
-      }
     }
   }
   process(inputs, outputs) {
@@ -304,10 +281,15 @@ class GhostAudioProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < frames; i++) {
       if (this.count >= ch) {
         for (let c = 0; c < ch; c++) {
-          out[c][i] = this.buf[(this.r + c) % this.capacity];
+          const v = this.buf[(this.r + c) % this.capacity];
+          out[c][i] = v;
+          this.last[c] = v;
         }
+        this.hasLast = true;
         this.r = (this.r + ch) % this.capacity;
         this.count -= ch;
+      } else if (this.hasLast) {
+        for (let c = 0; c < ch; c++) out[c][i] = this.last[c];
       } else {
         for (let c = 0; c < ch; c++) out[c][i] = 0;
       }
@@ -359,9 +341,11 @@ registerProcessor('ghost-audio-processor', GhostAudioProcessor);
       }
 
       const samplesMs = (ms) => Math.floor(ctxRate * audioCh * ms / 1000);
-      const ring = createAudioRing(samplesMs(500));
+      const ring = createAudioRing(samplesMs(8000));
       let playPrimed = false;
-      const primedSamples = () => samplesMs(100);
+      const primedSamples = () => samplesMs(2000);
+      const lastFrame = new Float32Array(audioCh);
+      let hasLast = false;
       audioPush = (ab) => {
         let f32 = new Float32Array(ab);
         if (!f32.length) return;
@@ -391,7 +375,15 @@ registerProcessor('ghost-audio-processor', GhostAudioProcessor);
         for (let i = 0; i < frames; i++) {
           for (let c = 0; c < ch; c++) {
             const idx = i * ch + c;
-            outs[c][i] = idx < got ? scratch[idx] : 0;
+            if (idx < got) {
+              outs[c][i] = scratch[idx];
+              lastFrame[c] = scratch[idx];
+              hasLast = true;
+            } else if (hasLast) {
+              outs[c][i] = lastFrame[c];
+            } else {
+              outs[c][i] = 0;
+            }
           }
         }
       };
@@ -454,7 +446,7 @@ registerProcessor('ghost-audio-processor', GhostAudioProcessor);
               for (const buf of audioQueue) audioPush(buf);
             }
             audioQueue = [];
-            statusEl.textContent = 'Конфигурация получена, ожидание потока…';
+            statusEl.textContent = 'Конфигурация получена, буферизация ~2 с…';
           } catch (e) {
             statusEl.textContent = 'Ошибка инициализации звука';
             await stopAudio();
