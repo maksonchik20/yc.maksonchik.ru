@@ -200,17 +200,8 @@
       let read = 0;
       let count = 0;
       return {
-        reset() {
-          write = read = count = 0;
-        },
-        available() {
-          return count;
-        },
-        skip(samples) {
-          const drop = Math.min(samples, count);
-          read = (read + drop) % capacity;
-          count -= drop;
-        },
+        reset() { write = read = count = 0; },
+        available() { return count; },
         push(data) {
           for (let i = 0; i < data.length; i++) {
             if (count >= capacity) {
@@ -234,6 +225,99 @@
       };
     }
 
+    function makeAudioPushWorklet(node, streamRate, ctxRate, channels) {
+      let pending = new Float32Array(0);
+      const batchSamples = () => Math.max(256, Math.floor(ctxRate * channels * 0.02));
+      return (ab) => {
+        let f32 = new Float32Array(ab);
+        if (!f32.length) return;
+        if (streamRate !== ctxRate) {
+          f32 = resampleInterleaved(f32, streamRate, ctxRate, channels);
+        }
+        if (pending.length) {
+          const merged = new Float32Array(pending.length + f32.length);
+          merged.set(pending);
+          merged.set(f32, pending.length);
+          f32 = merged;
+          pending = new Float32Array(0);
+        }
+        while (f32.length >= batchSamples()) {
+          const chunk = f32.subarray(0, batchSamples());
+          node.port.postMessage(chunk.slice(0));
+          f32 = f32.subarray(batchSamples());
+        }
+        if (f32.length) pending = f32.slice(0);
+      };
+    }
+
+    const AUDIO_WORKLET_CODE = `
+class GhostAudioProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    this.ch = (options.processorOptions && options.processorOptions.channels) || 2;
+    this.capacity = Math.max(4096, Math.floor(sampleRate * this.ch * 0.8));
+    this.buf = new Float32Array(this.capacity);
+    this.w = 0;
+    this.r = 0;
+    this.count = 0;
+    this.primed = false;
+    this.target = Math.floor(sampleRate * this.ch * 0.22);
+    this.hardMax = Math.floor(sampleRate * this.ch * 0.45);
+    this.primeNeed = Math.floor(sampleRate * this.ch * 0.10);
+    this.port.onmessage = (e) => {
+      const data = e.data;
+      if (data && data.length) this._push(data);
+    };
+  }
+  _push(data) {
+    const ch = this.ch;
+    for (let i = 0; i < data.length; i++) {
+      if (this.count >= this.capacity) {
+        this.r = (this.r + 1) % this.capacity;
+        this.count--;
+      }
+      this.buf[this.w] = data[i];
+      this.w = (this.w + 1) % this.capacity;
+      this.count++;
+    }
+    if (this.count > this.hardMax) {
+      let drop = this.count - this.target;
+      drop -= drop % ch;
+      if (drop > 0) {
+        this.r = (this.r + drop) % this.capacity;
+        this.count -= drop;
+      }
+    }
+  }
+  process(inputs, outputs) {
+    const out = outputs[0];
+    if (!out || !out.length) return true;
+    const ch = out.length;
+    const frames = out[0].length;
+    if (!this.primed) {
+      if (this.count < this.primeNeed) {
+        for (let c = 0; c < ch; c++) out[c].fill(0);
+        return true;
+      }
+      this.primed = true;
+    }
+    for (let i = 0; i < frames; i++) {
+      if (this.count >= ch) {
+        for (let c = 0; c < ch; c++) {
+          out[c][i] = this.buf[(this.r + c) % this.capacity];
+        }
+        this.r = (this.r + ch) % this.capacity;
+        this.count -= ch;
+      } else {
+        for (let c = 0; c < ch; c++) out[c][i] = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('ghost-audio-processor', GhostAudioProcessor);
+`;
+
     function sameAudioConfig(rate, channels) {
       return audioCtx && audioReady &&
         audioRate === (rate || 48000) && audioCh === (channels || 2);
@@ -255,12 +339,29 @@
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       const streamRate = audioRate;
       const ctxRate = audioCtx.sampleRate;
+
+      if (audioCtx.audioWorklet) {
+        const blob = new Blob([AUDIO_WORKLET_CODE], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        try {
+          await audioCtx.audioWorklet.addModule(url);
+          URL.revokeObjectURL(url);
+          audioNode = new AudioWorkletNode(audioCtx, 'ghost-audio-processor', {
+            outputChannelCount: [audioCh],
+            processorOptions: { channels: audioCh },
+          });
+          audioNode.connect(audioCtx.destination);
+          audioPush = makeAudioPushWorklet(audioNode, streamRate, ctxRate, audioCh);
+          return;
+        } catch (e) {
+          URL.revokeObjectURL(url);
+        }
+      }
+
       const samplesMs = (ms) => Math.floor(ctxRate * audioCh * ms / 1000);
-      const ring = createAudioRing(samplesMs(400));
+      const ring = createAudioRing(samplesMs(500));
       let playPrimed = false;
-      const primedSamples = () => samplesMs(80);
-      const targetBuffered = () => samplesMs(120);
-      const maxBuffered = () => samplesMs(200);
+      const primedSamples = () => samplesMs(100);
       audioPush = (ab) => {
         let f32 = new Float32Array(ab);
         if (!f32.length) return;
@@ -268,10 +369,6 @@
           f32 = resampleInterleaved(f32, streamRate, ctxRate, audioCh);
         }
         ring.push(f32);
-        const avail = ring.available();
-        if (avail > maxBuffered()) {
-          ring.skip(avail - targetBuffered());
-        }
       };
       const bufferSize = 2048;
       const scratch = new Float32Array(bufferSize * audioCh);
@@ -289,10 +386,6 @@
             return;
           }
           playPrimed = true;
-        }
-        const avail = ring.available();
-        if (avail > maxBuffered()) {
-          ring.skip(avail - targetBuffered());
         }
         const got = ring.readInto(scratch, need);
         for (let i = 0; i < frames; i++) {
@@ -317,7 +410,7 @@
       if (audioCtx) {
         try {
           if (audioNode) {
-            audioNode.onaudioprocess = null;
+            if (audioNode.port) audioNode.port.onmessage = null;
             audioNode.disconnect();
             audioNode = null;
           }
