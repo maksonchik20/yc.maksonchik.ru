@@ -196,7 +196,8 @@ async def handler(websocket, path):
                         'audio %s forwarded %d bytes (sinks=%d)',
                         session_id, room.bytes_forwarded, len(room.sinks),
                     )
-                await fanout(room, message)
+                msg = bytes(message)
+                asyncio.create_task(fanout(room, msg))
                 continue
             await fanout(room, message)
     except ConnectionClosed:

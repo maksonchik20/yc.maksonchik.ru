@@ -206,6 +206,11 @@
         available() {
           return count;
         },
+        skip(samples) {
+          const drop = Math.min(samples, count);
+          read = (read + drop) % capacity;
+          count -= drop;
+        },
         push(data) {
           for (let i = 0; i < data.length; i++) {
             if (count >= capacity) {
@@ -250,9 +255,12 @@
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       const streamRate = audioRate;
       const ctxRate = audioCtx.sampleRate;
-      const ring = createAudioRing(Math.floor(ctxRate * audioCh * 2.0));
+      const samplesMs = (ms) => Math.floor(ctxRate * audioCh * ms / 1000);
+      const ring = createAudioRing(samplesMs(400));
       let playPrimed = false;
-      const primedSamples = () => Math.floor(ctxRate * audioCh * 0.35);
+      const primedSamples = () => samplesMs(80);
+      const targetBuffered = () => samplesMs(120);
+      const maxBuffered = () => samplesMs(200);
       audioPush = (ab) => {
         let f32 = new Float32Array(ab);
         if (!f32.length) return;
@@ -260,8 +268,12 @@
           f32 = resampleInterleaved(f32, streamRate, ctxRate, audioCh);
         }
         ring.push(f32);
+        const avail = ring.available();
+        if (avail > maxBuffered()) {
+          ring.skip(avail - targetBuffered());
+        }
       };
-      const bufferSize = 4096;
+      const bufferSize = 2048;
       const scratch = new Float32Array(bufferSize * audioCh);
       audioNode = audioCtx.createScriptProcessor(bufferSize, 0, audioCh);
       audioNode.onaudioprocess = (e) => {
@@ -277,6 +289,10 @@
             return;
           }
           playPrimed = true;
+        }
+        const avail = ring.available();
+        if (avail > maxBuffered()) {
+          ring.skip(avail - targetBuffered());
         }
         const got = ring.readInto(scratch, need);
         for (let i = 0; i < frames; i++) {
