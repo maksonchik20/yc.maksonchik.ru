@@ -18,7 +18,10 @@ INSTALLED_APPS = [
     'webhook_tg.apps.WebhookTgConfig',
     'main.apps.MainConfig',
     'ai_chat.apps.AiChatConfig',
+    'ghost_note.apps.GhostNoteConfig',
 ]
+
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -56,6 +59,9 @@ DATABASES = {
         'USER': 'django',
         'HOST': 'localhost',
         'PASSWORD': 'f7XKuq7sdGP3o',
+        'OPTIONS': {
+            'charset': 'utf8mb4',
+        },
     }
 }
 

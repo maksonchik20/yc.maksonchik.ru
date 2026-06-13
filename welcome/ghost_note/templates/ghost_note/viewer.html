@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ghost Note — {{ session_id }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 16px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    header .session { font-size: 0.85rem; color: #94a3b8; word-break: break-all; }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .screen-wrap {
+      flex: 1;
+      background: #0f0f1a;
+      border-radius: 8px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+    .screen-wrap img {
+      max-width: 100%;
+      max-height: 70vh;
+      object-fit: contain;
+    }
+    .screen-wrap .placeholder { color: #64748b; }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    textarea {
+      flex: 1;
+      min-width: 200px;
+      min-height: 80px;
+      padding: 10px;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      background: #0f172a;
+      color: #f1f5f9;
+      font-size: 1rem;
+      resize: vertical;
+    }
+    button {
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    button:hover { background: #2563eb; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .status { font-size: 0.85rem; color: #94a3b8; }
+    .note { font-size: 0.8rem; color: #64748b; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Ghost Note</h1>
+    <span class="session">Сессия: {{ session_id }}</span>
+  </header>
+  <main>
+    <div class="screen-wrap">
+      <img id="screen" alt="Экран" style="display:none">
+      <span id="placeholder" class="placeholder">Ожидание скриншота…</span>
+    </div>
+    <div class="controls">
+      <textarea id="text" placeholder="Текст для окна на ПК…"></textarea>
+      <button type="button" id="send">Отправить</button>
+    </div>
+    <p class="status" id="status">Обновление каждые 2 с</p>
+    <p class="note">Аудио доступно только в локальном режиме на ПК.</p>
+  </main>
+  <script>
+    const SESSION_ID = '{{ session_id }}';
+    const screenImg = document.getElementById('screen');
+    const placeholder = document.getElementById('placeholder');
+    const textArea = document.getElementById('text');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+
+    async function refreshScreenshot() {
+      try {
+        const r = await fetch('/ghost/screenshot/get/?session_id=' + encodeURIComponent(SESSION_ID), {
+          cache: 'no-store'
+        });
+        if (r.status === 204) return;
+        if (!r.ok) throw new Error(r.status);
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        screenImg.onload = () => URL.revokeObjectURL(url);
+        screenImg.src = url;
+        screenImg.style.display = 'block';
+        placeholder.style.display = 'none';
+      } catch (e) {
+        statusEl.textContent = 'Ошибка загрузки скриншота';
+      }
+    }
+
+    async function sendText() {
+      const text = textArea.value;
+      if (!text.trim()) return;
+      sendBtn.disabled = true;
+      try {
+        const r = await fetch('/ghost/text/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: SESSION_ID, text: text })
+        });
+        if (!r.ok) throw new Error(r.status);
+        textArea.value = '';
+        statusEl.textContent = 'Текст отправлен';
+      } catch (e) {
+        statusEl.textContent = 'Ошибка отправки текста';
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendText);
+    textArea.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') sendText();
+    });
+
+    refreshScreenshot();
+    setInterval(refreshScreenshot, 2000);
+  </script>
+</body>
+</html>
