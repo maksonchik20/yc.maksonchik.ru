@@ -147,7 +147,7 @@
       <button type="button" id="audioBtn" class="secondary">Включить звук</button>
     </div>
     <p class="status" id="status">Обновление каждые 2 с</p>
-    <p class="note">Колёсико, pinch или кнопки ± — масштаб экрана. Ctrl+Enter — отправить.</p>
+    <p class="note">⌘/Ctrl + +/− — масштаб экрана. Pinch, колёсико или кнопки ±. Ctrl+Enter — отправить.</p>
   </main>
   <script>
     function initScreenZoom(wrap, img) {
@@ -190,6 +190,38 @@
       if (zoomIn) zoomIn.addEventListener('click', () => setUserScale(userScale + 0.25));
       if (zoomOut) zoomOut.addEventListener('click', () => setUserScale(userScale - 0.25));
       if (zoomReset) zoomReset.addEventListener('click', () => setUserScale(1));
+
+      function isEditableTarget(el) {
+        if (!el || !el.tagName) return false;
+        const tag = el.tagName.toLowerCase();
+        return tag === 'textarea' || tag === 'input' || tag === 'select' || el.isContentEditable;
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+        if (isEditableTarget(e.target)) return;
+        if (img.style.display === 'none') return;
+
+        const code = e.code;
+        const key = e.key;
+        let handled = false;
+
+        if (code === 'Equal' || code === 'NumpadAdd' || key === '+' || key === '=') {
+          setUserScale(userScale + 0.25);
+          handled = true;
+        } else if (code === 'Minus' || code === 'NumpadSubtract' || key === '-' || key === '_') {
+          setUserScale(userScale - 0.25);
+          handled = true;
+        } else if (code === 'Digit0' || code === 'Numpad0' || key === '0') {
+          setUserScale(1);
+          handled = true;
+        }
+
+        if (handled) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
 
       wrap.addEventListener('wheel', (e) => {
         if (img.style.display === 'none') return;
