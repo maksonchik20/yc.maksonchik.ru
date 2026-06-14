@@ -40,19 +40,49 @@
       flex: 1;
       background: #0f0f1a;
       border-radius: 8px;
-      overflow: hidden;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: none;
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: center;
       min-height: 300px;
+      max-height: 70vh;
       border: 1px solid #334155;
     }
     .screen-wrap img {
-      max-width: 100%;
-      max-height: 70vh;
+      display: block;
+      margin: 0 auto;
+      max-width: none;
+      max-height: none;
       object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
     }
-    .screen-wrap .placeholder { color: #64748b; padding: 16px; text-align: center; }
+    .screen-wrap .placeholder {
+      color: #64748b;
+      padding: 16px;
+      text-align: center;
+      margin: auto;
+    }
+    .screen-zoom-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .screen-zoom-controls .zoom-label {
+      min-width: 52px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .screen-zoom-controls button {
+      min-width: 44px;
+      padding: 8px 14px;
+    }
     .controls {
       display: flex;
       gap: 8px;
@@ -99,9 +129,15 @@
     <span class="session">Сессия: {{ session_id }}</span>
   </header>
   <main>
-    <div class="screen-wrap">
+    <div class="screen-wrap" id="screenWrap">
       <img id="screen" alt="Экран" style="display:none">
       <span id="placeholder" class="placeholder">Ожидание скриншота…</span>
+    </div>
+    <div class="screen-zoom-controls">
+      <button type="button" id="zoomOut" class="secondary" aria-label="Уменьшить">−</button>
+      <span id="zoomLabel" class="zoom-label">100%</span>
+      <button type="button" id="zoomIn" class="secondary" aria-label="Увеличить">+</button>
+      <button type="button" id="zoomReset" class="secondary">Сброс</button>
     </div>
     <div class="controls">
       <textarea id="text" placeholder="Текст для окна на ПК…"></textarea>
@@ -111,11 +147,96 @@
       <button type="button" id="audioBtn" class="secondary">Включить звук</button>
     </div>
     <p class="status" id="status">Обновление каждые 2 с</p>
-    <p class="note">Ctrl+Enter — отправить. Звук транслируется с ПК по WebSocket.</p>
+    <p class="note">Колёсико, pinch или кнопки ± — масштаб экрана. Ctrl+Enter — отправить.</p>
   </main>
   <script>
+    function initScreenZoom(wrap, img) {
+      let userScale = 1;
+      let baseFit = 1;
+      let pinchStartDist = 0;
+      let pinchStartScale = 1;
+      let pinchActive = false;
+      let lastTap = 0;
+      const minUser = 1;
+      const maxUser = 5;
+      const zoomOut = document.getElementById('zoomOut');
+      const zoomIn = document.getElementById('zoomIn');
+      const zoomReset = document.getElementById('zoomReset');
+      const zoomLabel = document.getElementById('zoomLabel');
+
+      function updateLabel() {
+        if (zoomLabel) zoomLabel.textContent = Math.round(userScale * 100) + '%';
+      }
+
+      function applyLayout() {
+        if (!img.naturalWidth || img.style.display === 'none') return;
+        const availW = Math.max(1, wrap.clientWidth);
+        const availH = Math.max(1, wrap.clientHeight);
+        baseFit = Math.min(1, availW / img.naturalWidth, availH / img.naturalHeight);
+        if (!isFinite(baseFit) || baseFit <= 0) baseFit = 1;
+        img.style.width = (img.naturalWidth * baseFit * userScale) + 'px';
+        img.style.height = 'auto';
+        updateLabel();
+      }
+
+      function setUserScale(next) {
+        userScale = Math.min(maxUser, Math.max(minUser, next));
+        applyLayout();
+      }
+
+      img.addEventListener('load', applyLayout);
+      window.addEventListener('resize', applyLayout);
+
+      if (zoomIn) zoomIn.addEventListener('click', () => setUserScale(userScale + 0.25));
+      if (zoomOut) zoomOut.addEventListener('click', () => setUserScale(userScale - 0.25));
+      if (zoomReset) zoomReset.addEventListener('click', () => setUserScale(1));
+
+      wrap.addEventListener('wheel', (e) => {
+        if (img.style.display === 'none') return;
+        e.preventDefault();
+        setUserScale(userScale + (e.deltaY < 0 ? 0.15 : -0.15));
+      }, { passive: false });
+
+      wrap.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          pinchActive = true;
+          pinchStartDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          pinchStartScale = userScale;
+        }
+      }, { passive: true });
+
+      wrap.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 2 || !pinchStartDist) return;
+        e.preventDefault();
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        setUserScale(pinchStartScale * (dist / pinchStartDist));
+      }, { passive: false });
+
+      wrap.addEventListener('touchend', (e) => {
+        if (e.touches.length >= 2) return;
+        if (pinchActive) {
+          if (e.touches.length === 0) pinchActive = false;
+          return;
+        }
+        if (e.changedTouches.length !== 1) return;
+        const now = Date.now();
+        if (now - lastTap < 320) setUserScale(userScale > 1.05 ? 1 : 2);
+        lastTap = now;
+      });
+
+      return { applyLayout, reset: () => setUserScale(1) };
+    }
+
     const SESSION_ID = '{{ session_id }}';
+    const screenWrap = document.getElementById('screenWrap');
     const screenImg = document.getElementById('screen');
+    const screenZoom = initScreenZoom(screenWrap, screenImg);
     const placeholder = document.getElementById('placeholder');
     const textArea = document.getElementById('text');
     const sendBtn = document.getElementById('send');
@@ -131,7 +252,10 @@
         if (!r.ok) throw new Error(r.status);
         const blob = await r.blob();
         const url = URL.createObjectURL(blob);
-        screenImg.onload = () => URL.revokeObjectURL(url);
+        screenImg.onload = () => {
+          URL.revokeObjectURL(url);
+          screenZoom.applyLayout();
+        };
         screenImg.src = url;
         screenImg.style.display = 'block';
         placeholder.style.display = 'none';
