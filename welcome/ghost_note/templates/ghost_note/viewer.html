@@ -42,15 +42,25 @@
       border-radius: 8px;
       overflow: auto;
       -webkit-overflow-scrolling: touch;
-      touch-action: none;
-      display: flex;
-      align-items: flex-start;
-      justify-content: center;
+      touch-action: pan-x pan-y;
+      display: block;
+      position: relative;
       min-height: 300px;
       max-height: 70vh;
       border: 1px solid #334155;
     }
-    .screen-wrap img {
+    .screen-wrap.is-zoomed { cursor: grab; }
+    .screen-wrap.is-dragging { cursor: grabbing; }
+    .screen-pan {
+      display: inline-block;
+      min-width: 100%;
+      vertical-align: top;
+    }
+    .screen-pan.is-zoomed {
+      display: block;
+      min-width: 0;
+    }
+    .screen-pan img {
       display: block;
       margin: 0 auto;
       max-width: none;
@@ -60,11 +70,17 @@
       -webkit-user-drag: none;
       pointer-events: none;
     }
+    .screen-pan.is-zoomed img { margin: 0; }
     .screen-wrap .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       color: #64748b;
       padding: 16px;
       text-align: center;
-      margin: auto;
+      pointer-events: none;
     }
     .screen-zoom-controls {
       display: flex;
@@ -130,7 +146,9 @@
   </header>
   <main>
     <div class="screen-wrap" id="screenWrap">
-      <img id="screen" alt="Экран" style="display:none">
+      <div class="screen-pan" id="screenPan">
+        <img id="screen" alt="Экран" style="display:none">
+      </div>
       <span id="placeholder" class="placeholder">Ожидание скриншота…</span>
     </div>
     <div class="screen-zoom-controls">
@@ -147,16 +165,21 @@
       <button type="button" id="audioBtn" class="secondary">Включить звук</button>
     </div>
     <p class="status" id="status">Обновление каждые 2 с</p>
-    <p class="note">⌘/Ctrl + +/− — масштаб экрана. Pinch, колёсико или кнопки ±. Ctrl+Enter — отправить.</p>
+    <p class="note">⌘/Ctrl + +/− — масштаб. При зуме — перетаскивание, трекпад или прокрутка. Ctrl+Enter — отправить.</p>
   </main>
   <script>
-    function initScreenZoom(wrap, img) {
+    function initScreenZoom(wrap, pan, img) {
       let userScale = 1;
       let baseFit = 1;
       let pinchStartDist = 0;
       let pinchStartScale = 1;
       let pinchActive = false;
       let lastTap = 0;
+      let dragActive = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragScrollLeft = 0;
+      let dragScrollTop = 0;
       const minUser = 1;
       const maxUser = 5;
       const zoomOut = document.getElementById('zoomOut');
@@ -168,6 +191,13 @@
         if (zoomLabel) zoomLabel.textContent = Math.round(userScale * 100) + '%';
       }
 
+      function isZoomedLayout() {
+        if (!img.naturalWidth) return false;
+        const availW = Math.max(1, wrap.clientWidth);
+        const displayW = img.naturalWidth * baseFit * userScale;
+        return userScale > 1.01 || displayW > availW + 1;
+      }
+
       function applyLayout() {
         if (!img.naturalWidth || img.style.display === 'none') return;
         const availW = Math.max(1, wrap.clientWidth);
@@ -176,12 +206,31 @@
         if (!isFinite(baseFit) || baseFit <= 0) baseFit = 1;
         img.style.width = (img.naturalWidth * baseFit * userScale) + 'px';
         img.style.height = 'auto';
+        const zoomed = isZoomedLayout();
+        pan.classList.toggle('is-zoomed', zoomed);
+        wrap.classList.toggle('is-zoomed', zoomed);
         updateLabel();
       }
 
-      function setUserScale(next) {
+      function setUserScale(next, anchorX, anchorY) {
+        const prevScale = userScale;
+        const prevScrollLeft = wrap.scrollLeft;
+        const prevScrollTop = wrap.scrollTop;
         userScale = Math.min(maxUser, Math.max(minUser, next));
         applyLayout();
+        if (userScale <= 1.01) {
+          wrap.scrollLeft = 0;
+          wrap.scrollTop = 0;
+          return;
+        }
+        if (userScale === prevScale) return;
+        if (anchorX == null) {
+          anchorX = prevScrollLeft + wrap.clientWidth / 2;
+          anchorY = prevScrollTop + wrap.clientHeight / 2;
+        }
+        const ratio = userScale / prevScale;
+        wrap.scrollLeft = Math.max(0, anchorX * ratio - (anchorX - prevScrollLeft));
+        wrap.scrollTop = Math.max(0, anchorY * ratio - (anchorY - prevScrollTop));
       }
 
       img.addEventListener('load', applyLayout);
@@ -225,9 +274,40 @@
 
       wrap.addEventListener('wheel', (e) => {
         if (img.style.display === 'none') return;
+        if (!(e.ctrlKey || e.metaKey)) return;
         e.preventDefault();
-        setUserScale(userScale + (e.deltaY < 0 ? 0.15 : -0.15));
+        const ax = wrap.scrollLeft + e.clientX - wrap.getBoundingClientRect().left;
+        const ay = wrap.scrollTop + e.clientY - wrap.getBoundingClientRect().top;
+        setUserScale(userScale + (e.deltaY < 0 ? 0.15 : -0.15), ax, ay);
       }, { passive: false });
+
+      wrap.addEventListener('pointerdown', (e) => {
+        if (img.style.display === 'none' || !isZoomedLayout()) return;
+        if (e.button !== 0) return;
+        dragActive = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        dragScrollLeft = wrap.scrollLeft;
+        dragScrollTop = wrap.scrollTop;
+        wrap.setPointerCapture(e.pointerId);
+        wrap.classList.add('is-dragging');
+      });
+
+      wrap.addEventListener('pointermove', (e) => {
+        if (!dragActive) return;
+        wrap.scrollLeft = dragScrollLeft - (e.clientX - dragStartX);
+        wrap.scrollTop = dragScrollTop - (e.clientY - dragStartY);
+      });
+
+      function endDrag(e) {
+        if (!dragActive) return;
+        dragActive = false;
+        wrap.classList.remove('is-dragging');
+        try { wrap.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+
+      wrap.addEventListener('pointerup', endDrag);
+      wrap.addEventListener('pointercancel', endDrag);
 
       wrap.addEventListener('touchstart', (e) => {
         if (e.touches.length === 2) {
@@ -247,7 +327,11 @@
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
-        setUserScale(pinchStartScale * (dist / pinchStartDist));
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const ax = wrap.scrollLeft + midX - wrap.getBoundingClientRect().left;
+        const ay = wrap.scrollTop + midY - wrap.getBoundingClientRect().top;
+        setUserScale(pinchStartScale * (dist / pinchStartDist), ax, ay);
       }, { passive: false });
 
       wrap.addEventListener('touchend', (e) => {
@@ -267,8 +351,9 @@
 
     const SESSION_ID = '{{ session_id }}';
     const screenWrap = document.getElementById('screenWrap');
+    const screenPan = document.getElementById('screenPan');
     const screenImg = document.getElementById('screen');
-    const screenZoom = initScreenZoom(screenWrap, screenImg);
+    const screenZoom = initScreenZoom(screenWrap, screenPan, screenImg);
     const placeholder = document.getElementById('placeholder');
     const textArea = document.getElementById('text');
     const sendBtn = document.getElementById('send');
