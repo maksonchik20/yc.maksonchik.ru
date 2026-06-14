@@ -83,10 +83,13 @@
       font-family: inherit;
     }
     button:hover { background: #2563eb; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
     button.secondary { background: #475569; }
     button.secondary:hover { background: #334155; }
-    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .dev-note { font-size: 0.85rem; color: #64748b; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.secondary:disabled { background: #334155; color: #94a3b8; }
+    button.secondary:disabled:hover { background: #334155; }
     .status { font-size: 0.85rem; color: #94a3b8; }
     .note { font-size: 0.8rem; color: #64748b; }
   </style>
@@ -106,13 +109,15 @@
       <button type="button" id="send">Отправить</button>
     </div>
     <div class="btn-row">
-      <button type="button" id="audioBtn" class="secondary">Включить звук</button>
+      <button type="button" id="audioBtn" class="secondary" disabled>Включить звук</button>
+      <span class="dev-note">Трансляция звука — в разработке</span>
     </div>
     <p class="status" id="status">Обновление каждые 2 с</p>
-    <p class="note">Ctrl+Enter — отправить. Звук транслируется с ПК по WebSocket.</p>
+    <p class="note">Ctrl+Enter — отправить текст.</p>
   </main>
   <script>
     const SESSION_ID = '{{ session_id }}';
+    const AUDIO_DEV_DISABLED = true;
     const screenImg = document.getElementById('screen');
     const placeholder = document.getElementById('placeholder');
     const textArea = document.getElementById('text');
@@ -528,6 +533,7 @@ registerProcessor('ghost-audio-processor', GhostAudioProcessor);
     }
 
     audioBtn.addEventListener('click', async () => {
+      if (AUDIO_DEV_DISABLED) return;
       audioBtn.disabled = true;
       try {
         if (audioOn) {
@@ -546,7 +552,7 @@ registerProcessor('ghost-audio-processor', GhostAudioProcessor);
         statusEl.textContent = 'Ошибка управления звуком';
         await stopAudio();
       } finally {
-        audioBtn.disabled = false;
+        if (!AUDIO_DEV_DISABLED) audioBtn.disabled = false;
       }
     });
   </script>
