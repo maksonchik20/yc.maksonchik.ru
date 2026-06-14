@@ -8,10 +8,14 @@ from .models import GhostAccessToken, GhostSession
 GHOST_SESSION_NAMESPACE = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 
 
-def format_expires_at(dt):
+def format_token_datetime(dt):
     if dt is None:
         return ''
     return timezone.localtime(dt).strftime('%d.%m.%Y %H:%M')
+
+
+def format_expires_at(dt):
+    return format_token_datetime(dt)
 
 
 def validate_access_token(token_str):
@@ -27,10 +31,14 @@ def validate_access_token(token_str):
     if not token.is_active:
         return None, 'invalid', None
 
-    if timezone.now() >= token.expires_at:
+    now = timezone.now()
+    if now < token.starts_at:
+        return None, 'not_started', token.starts_at
+
+    if now >= token.expires_at:
         return None, 'expired', token.expires_at
 
-    token.last_used_at = timezone.now()
+    token.last_used_at = now
     token.save(update_fields=['last_used_at'])
     return token, 'ok', token.expires_at
 
@@ -39,7 +47,8 @@ def session_token_valid(session):
     if session.access_token_id is None:
         return True
     token = session.access_token
-    return token.is_active and timezone.now() < token.expires_at
+    now = timezone.now()
+    return token.is_active and token.starts_at <= now < token.expires_at
 
 
 def get_token_from_request(request):

@@ -20,10 +20,12 @@ from .models import GhostSession, GhostTextMessage
 JSON_UTF8 = {'ensure_ascii': False}
 
 
-def _auth_error_response(error, expires_at=None, status=401):
+def _auth_error_response(error, expires_at=None, starts_at=None, status=401):
     payload = {'ok': False, 'error': error}
     if expires_at is not None:
         payload['expires_at'] = format_expires_at(expires_at)
+    if starts_at is not None:
+        payload['starts_at'] = format_expires_at(starts_at)
     return JsonResponse(payload, status=status)
 
 
@@ -62,9 +64,11 @@ def _get_or_create_session(session_id, access_token=None):
 
 def _require_valid_token(request):
     token_str = get_token_from_request(request)
-    token, error, expires_at = validate_access_token(token_str)
+    token, error, dt = validate_access_token(token_str)
     if token is None:
-        return None, _auth_error_response(error, expires_at)
+        if error == 'not_started':
+            return None, _auth_error_response(error, starts_at=dt)
+        return None, _auth_error_response(error, expires_at=dt)
     return token, None
 
 
@@ -92,16 +96,19 @@ def validate_token(request):
         return JsonResponse({'ok': False, 'error': 'invalid'}, status=400)
 
     token_str = payload.get('token', '')
-    token, error, expires_at = validate_access_token(token_str)
+    token, error, dt = validate_access_token(token_str)
     if token is None:
         response = {'ok': False, 'error': error}
-        if expires_at is not None:
-            response['expires_at'] = format_expires_at(expires_at)
+        if error == 'not_started' and dt is not None:
+            response['starts_at'] = format_expires_at(dt)
+        elif error == 'expired' and dt is not None:
+            response['expires_at'] = format_expires_at(dt)
         return JsonResponse(response, status=401)
 
     return JsonResponse({
         'ok': True,
-        'expires_at': format_expires_at(expires_at),
+        'expires_at': format_expires_at(dt),
+        'starts_at': format_expires_at(token.starts_at),
         'allow_local': token.allow_local,
         'allow_remote': token.allow_remote,
     })
@@ -110,9 +117,11 @@ def validate_token(request):
 @require_GET
 def viewer_by_token(request):
     token_str = request.GET.get('token', '').strip()
-    token, error, expires_at = validate_access_token(token_str)
+    token, error, dt = validate_access_token(token_str)
     if token is None:
-        return _auth_error_response(error, expires_at)
+        if error == 'not_started':
+            return _auth_error_response(error, starts_at=dt)
+        return _auth_error_response(error, expires_at=dt)
 
     session = get_or_create_session_for_token(token)
     return render(request, 'ghost_note/viewer.html', {

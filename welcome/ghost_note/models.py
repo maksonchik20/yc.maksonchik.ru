@@ -33,6 +33,7 @@ class GhostAccessToken(models.Model):
         verbose_name='Токен',
     )
     label = models.CharField(max_length=128, blank=True, verbose_name='Заметка')
+    starts_at = models.DateTimeField(default=timezone.now, verbose_name='Действителен с')
     expires_at = models.DateTimeField(verbose_name='Действителен до')
     is_active = models.BooleanField(default=True, verbose_name='Активен')
     allow_local = models.BooleanField(default=True, verbose_name='Локальный доступ')
@@ -51,7 +52,8 @@ class GhostAccessToken(models.Model):
 
     @property
     def is_valid(self):
-        return self.is_active and timezone.now() < self.expires_at
+        now = timezone.now()
+        return self.is_active and self.starts_at <= now < self.expires_at
 
 
 class GhostSession(models.Model):

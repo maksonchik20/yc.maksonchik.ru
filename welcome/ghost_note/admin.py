@@ -17,6 +17,10 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
         allow_remote = cleaned.get('allow_remote')
         if allow_local is False and allow_remote is False:
             raise ValidationError('Выберите хотя бы один вариант использования: локальный или удалённый.')
+        starts_at = cleaned.get('starts_at')
+        expires_at = cleaned.get('expires_at')
+        if starts_at and expires_at and starts_at >= expires_at:
+            raise ValidationError('Время начала должно быть раньше времени окончания.')
         return cleaned
 
 
@@ -25,7 +29,7 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
     form = GhostAccessTokenAdminForm
     list_display = (
         'token_preview', 'label', 'allow_local', 'allow_remote',
-        'expires_at', 'is_active', 'last_used_at', 'created_at',
+        'starts_at', 'expires_at', 'is_active', 'last_used_at', 'created_at',
     )
     list_filter = ('is_active', 'allow_local', 'allow_remote')
     search_fields = ('token', 'label')
@@ -33,7 +37,7 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
     fieldsets = (
         (None, {
             'fields': (
-                'label', 'token', 'expires_at', 'is_active',
+                'label', 'token', 'starts_at', 'expires_at', 'is_active',
                 'allow_local', 'allow_remote', 'viewer_link',
             ),
         }),
@@ -58,7 +62,9 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
 
     def get_changeform_initial_data(self, request):
         initial = super().get_changeform_initial_data(request)
-        initial.setdefault('expires_at', timezone.now() + timezone.timedelta(days=7))
+        now = timezone.now()
+        initial.setdefault('starts_at', now)
+        initial.setdefault('expires_at', now + timezone.timedelta(days=7))
         return initial
 
 
