@@ -16,12 +16,12 @@ MSK_DATETIME_INPUT_FORMATS = [
 
 
 class GhostAccessTokenAdminForm(forms.ModelForm):
-    starts_at = forms.DateTimeField(
+    starts_at = forms.SplitDateTimeField(
         label='Действителен с',
         widget=admin_widgets.AdminSplitDateTime(),
         input_formats=MSK_DATETIME_INPUT_FORMATS,
     )
-    expires_at = forms.DateTimeField(
+    expires_at = forms.SplitDateTimeField(
         label='Действителен до',
         widget=admin_widgets.AdminSplitDateTime(),
         input_formats=MSK_DATETIME_INPUT_FORMATS,

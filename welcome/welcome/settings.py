@@ -92,6 +92,8 @@ DATE_FORMAT = 'd.m.Y'
 TIME_FORMAT = 'H:i'
 DATETIME_FORMAT = 'd.m.Y H:i'
 SHORT_DATETIME_FORMAT = 'd.m.Y H:i'
+DATE_INPUT_FORMATS = ['%Y-%m-%d', '%d.%m.%Y']
+TIME_INPUT_FORMATS = ['%H:%M:%S', '%H:%M']
 
 STATIC_URL = '/static/'
 STATIC_ROOT = '/usr/share/django-projects/welcome/static/'
