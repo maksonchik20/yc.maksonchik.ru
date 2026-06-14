@@ -178,6 +178,7 @@ async def handler(websocket, path):
 
     room.source = websocket
     LOG.info('uploader joined %s', session_id)
+    bytes_since_check = 0
     try:
         async for message in websocket:
             if isinstance(message, str):
@@ -190,6 +191,13 @@ async def handler(websocket, path):
                 except UnicodeDecodeError:
                     pass
             elif isinstance(message, bytes):
+                bytes_since_check += len(message)
+                if bytes_since_check >= 256 * 1024:
+                    bytes_since_check = 0
+                    session = await get_session(session_id)
+                    if session is None or not session.audio_enabled:
+                        await websocket.close(code=1008, reason='audio off')
+                        break
                 room.bytes_forwarded += len(message)
                 if room.bytes_forwarded <= len(message) or room.bytes_forwarded % (64 * 1024) < len(message):
                     LOG.info(
