@@ -7,24 +7,22 @@ from django.utils import timezone
 from .auth import format_token_datetime
 from .models import GhostAccessToken, GhostSession, GhostTextMessage
 
-MSK_DATETIME_INPUT_FORMATS = [
-    '%d.%m.%Y %H:%M',
-    '%d.%m.%Y %H:%M:%S',
-    '%Y-%m-%d %H:%M:%S',
-    '%Y-%m-%d %H:%M',
-]
+MSK_DATE_INPUT_FORMATS = ['%d.%m.%Y', '%Y-%m-%d']
+MSK_TIME_INPUT_FORMATS = ['%H:%M', '%H:%M:%S']
 
 
 class GhostAccessTokenAdminForm(forms.ModelForm):
     starts_at = forms.SplitDateTimeField(
         label='Действителен с',
         widget=admin_widgets.AdminSplitDateTime(),
-        input_formats=MSK_DATETIME_INPUT_FORMATS,
+        input_date_formats=MSK_DATE_INPUT_FORMATS,
+        input_time_formats=MSK_TIME_INPUT_FORMATS,
     )
     expires_at = forms.SplitDateTimeField(
         label='Действителен до',
         widget=admin_widgets.AdminSplitDateTime(),
-        input_formats=MSK_DATETIME_INPUT_FORMATS,
+        input_date_formats=MSK_DATE_INPUT_FORMATS,
+        input_time_formats=MSK_TIME_INPUT_FORMATS,
     )
 
     class Meta:
