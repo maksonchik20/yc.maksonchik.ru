@@ -1,12 +1,32 @@
 from django import forms
 from django.contrib import admin
+from django.contrib.admin import widgets as admin_widgets
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+from .auth import format_token_datetime
 from .models import GhostAccessToken, GhostSession, GhostTextMessage
+
+MSK_DATETIME_INPUT_FORMATS = [
+    '%d.%m.%Y %H:%M',
+    '%d.%m.%Y %H:%M:%S',
+    '%Y-%m-%d %H:%M:%S',
+    '%Y-%m-%d %H:%M',
+]
 
 
 class GhostAccessTokenAdminForm(forms.ModelForm):
+    starts_at = forms.DateTimeField(
+        label='Действителен с',
+        widget=admin_widgets.AdminSplitDateTime(),
+        input_formats=MSK_DATETIME_INPUT_FORMATS,
+    )
+    expires_at = forms.DateTimeField(
+        label='Действителен до',
+        widget=admin_widgets.AdminSplitDateTime(),
+        input_formats=MSK_DATETIME_INPUT_FORMATS,
+    )
+
     class Meta:
         model = GhostAccessToken
         fields = '__all__'
@@ -29,11 +49,12 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
     form = GhostAccessTokenAdminForm
     list_display = (
         'token_preview', 'label', 'allow_local', 'allow_remote',
-        'starts_at', 'expires_at', 'is_active', 'last_used_at', 'created_at',
+        'starts_at_msk', 'expires_at_msk', 'is_active',
+        'last_used_at_msk', 'created_at_msk',
     )
     list_filter = ('is_active', 'allow_local', 'allow_remote')
     search_fields = ('token', 'label')
-    readonly_fields = ('token', 'created_at', 'last_used_at', 'viewer_link')
+    readonly_fields = ('token', 'created_at_msk', 'last_used_at_msk', 'viewer_link')
     fieldsets = (
         (None, {
             'fields': (
@@ -42,7 +63,7 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
             ),
         }),
         ('Служебное', {
-            'fields': ('created_at', 'last_used_at'),
+            'fields': ('created_at_msk', 'last_used_at_msk'),
         }),
     )
 
@@ -50,6 +71,26 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
         return obj.token
 
     token_preview.short_description = 'Токен'
+
+    @admin.display(description='Действителен с', ordering='starts_at')
+    def starts_at_msk(self, obj):
+        return format_token_datetime(obj.starts_at)
+
+    @admin.display(description='Действителен до', ordering='expires_at')
+    def expires_at_msk(self, obj):
+        return format_token_datetime(obj.expires_at)
+
+    @admin.display(description='Последнее использование', ordering='last_used_at')
+    def last_used_at_msk(self, obj):
+        if not obj or not obj.last_used_at:
+            return '—'
+        return format_token_datetime(obj.last_used_at)
+
+    @admin.display(description='Создан', ordering='created_at')
+    def created_at_msk(self, obj):
+        if not obj or not obj.created_at:
+            return '—'
+        return format_token_datetime(obj.created_at)
 
     def viewer_link(self, obj):
         from urllib.parse import quote

@@ -88,6 +88,11 @@ USE_I18N = True
 
 USE_TZ = True
 
+DATE_FORMAT = 'd.m.Y'
+TIME_FORMAT = 'H:i'
+DATETIME_FORMAT = 'd.m.Y H:i'
+SHORT_DATETIME_FORMAT = 'd.m.Y H:i'
+
 STATIC_URL = '/static/'
 STATIC_ROOT = '/usr/share/django-projects/welcome/static/'
 

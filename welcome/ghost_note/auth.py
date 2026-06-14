@@ -11,7 +11,7 @@ GHOST_SESSION_NAMESPACE = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
 def format_token_datetime(dt):
     if dt is None:
         return ''
-    return timezone.localtime(dt).strftime('%d.%m.%Y %H:%M')
+    return timezone.localtime(dt).strftime('%d.%m.%Y %H:%M') + ' МСК'
 
 
 def format_expires_at(dt):

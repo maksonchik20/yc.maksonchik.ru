@@ -48,7 +48,8 @@ class GhostAccessToken(models.Model):
 
     def __str__(self):
         label = self.label or self.token
-        return f'{label} (до {self.expires_at:%d.%m.%Y %H:%M})'
+        expires = timezone.localtime(self.expires_at)
+        return f'{label} (до {expires:%d.%m.%Y %H:%M} МСК)'
 
     @property
     def is_valid(self):
