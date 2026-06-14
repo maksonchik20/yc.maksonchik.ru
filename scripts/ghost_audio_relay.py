@@ -90,6 +90,9 @@ def _validate_uploader(session_id, token):
     if not session.audio_enabled:
         return None, 'audio off'
 
+    if session.access_token_id and not session.access_token.allow_remote:
+        return None, 'remote not allowed'
+
     return session, None
 
 

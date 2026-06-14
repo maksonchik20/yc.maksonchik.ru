@@ -35,6 +35,8 @@ class GhostAccessToken(models.Model):
     label = models.CharField(max_length=128, blank=True, verbose_name='Заметка')
     expires_at = models.DateTimeField(verbose_name='Действителен до')
     is_active = models.BooleanField(default=True, verbose_name='Активен')
+    allow_local = models.BooleanField(default=True, verbose_name='Локальный доступ')
+    allow_remote = models.BooleanField(default=True, verbose_name='Удалённый доступ')
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True, verbose_name='Последнее использование')
 

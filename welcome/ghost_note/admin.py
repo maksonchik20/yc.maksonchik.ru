@@ -1,18 +1,41 @@
+from django import forms
 from django.contrib import admin
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from .models import GhostAccessToken, GhostSession, GhostTextMessage
 
 
+class GhostAccessTokenAdminForm(forms.ModelForm):
+    class Meta:
+        model = GhostAccessToken
+        fields = '__all__'
+
+    def clean(self):
+        cleaned = super().clean()
+        allow_local = cleaned.get('allow_local')
+        allow_remote = cleaned.get('allow_remote')
+        if allow_local is False and allow_remote is False:
+            raise ValidationError('Выберите хотя бы один вариант использования: локальный или удалённый.')
+        return cleaned
+
+
 @admin.register(GhostAccessToken)
 class GhostAccessTokenAdmin(admin.ModelAdmin):
-    list_display = ('token_preview', 'label', 'expires_at', 'is_active', 'last_used_at', 'created_at')
-    list_filter = ('is_active',)
+    form = GhostAccessTokenAdminForm
+    list_display = (
+        'token_preview', 'label', 'allow_local', 'allow_remote',
+        'expires_at', 'is_active', 'last_used_at', 'created_at',
+    )
+    list_filter = ('is_active', 'allow_local', 'allow_remote')
     search_fields = ('token', 'label')
     readonly_fields = ('token', 'created_at', 'last_used_at', 'viewer_link')
     fieldsets = (
         (None, {
-            'fields': ('label', 'token', 'expires_at', 'is_active', 'viewer_link'),
+            'fields': (
+                'label', 'token', 'expires_at', 'is_active',
+                'allow_local', 'allow_remote', 'viewer_link',
+            ),
         }),
         ('Служебное', {
             'fields': ('created_at', 'last_used_at'),

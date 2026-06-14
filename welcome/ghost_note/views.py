@@ -77,6 +77,12 @@ def _require_session_access(session, token=None):
     return None
 
 
+def _require_remote_access(token):
+    if not token.allow_remote:
+        return JsonResponse({'error': 'remote not allowed'}, status=403)
+    return None
+
+
 @csrf_exempt
 @require_POST
 def validate_token(request):
@@ -96,6 +102,8 @@ def validate_token(request):
     return JsonResponse({
         'ok': True,
         'expires_at': format_expires_at(expires_at),
+        'allow_local': token.allow_local,
+        'allow_remote': token.allow_remote,
     })
 
 
@@ -127,6 +135,9 @@ def viewer(request, session_id):
 @require_POST
 def upload_screenshot(request):
     token, denied = _require_valid_token(request)
+    if denied is not None:
+        return denied
+    denied = _require_remote_access(token)
     if denied is not None:
         return denied
 
@@ -200,6 +211,9 @@ def poll_text(request):
     token, denied = _require_valid_token(request)
     if denied is not None:
         return denied
+    denied = _require_remote_access(token)
+    if denied is not None:
+        return denied
 
     session_id = request.GET.get('session_id', '')
     session = _get_session(session_id)
@@ -224,6 +238,10 @@ def poll_text(request):
 @require_POST
 def register_session(request):
     token, denied = _require_valid_token(request)
+    if denied is not None:
+        return denied
+
+    denied = _require_remote_access(token)
     if denied is not None:
         return denied
 
@@ -284,6 +302,9 @@ def audio_status(request):
     token, denied = _require_valid_token(request)
     if denied is not None:
         return denied
+    denied = _require_remote_access(token)
+    if denied is not None:
+        return denied
 
     session_id = request.GET.get('session_id', '')
     session = _get_session(session_id)
@@ -301,6 +322,9 @@ def audio_status(request):
 @require_POST
 def upload_audio(request):
     token, denied = _require_valid_token(request)
+    if denied is not None:
+        return denied
+    denied = _require_remote_access(token)
     if denied is not None:
         return denied
 
