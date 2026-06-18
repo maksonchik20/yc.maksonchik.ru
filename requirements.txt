@@ -1,4 +1,5 @@
 django
+django-jazzmin>=2.6,<3
 dataclasses
 openai
 pillow

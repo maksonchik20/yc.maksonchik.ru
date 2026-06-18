@@ -9,6 +9,7 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
+    'jazzmin',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -99,3 +100,24 @@ STATIC_URL = '/static/'
 STATIC_ROOT = '/usr/share/django-projects/welcome/static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+JAZZMIN_SETTINGS = {
+    'site_title': 'Ghost Note Admin',
+    'site_header': 'Ghost Note',
+    'site_brand': 'Ghost Note',
+    'welcome_sign': 'Панель управления Ghost Note',
+    'copyright': 'Ghost Note',
+    'search_model': ['ghost_note.GhostUser', 'ghost_note.GhostAccessToken'],
+    'topmenu_links': [
+        {'name': 'Пользователи', 'url': 'admin:ghost_note_ghostuser_changelist'},
+        {'name': 'Токены', 'url': 'admin:ghost_note_ghostaccesstoken_changelist'},
+    ],
+    'order_with_respect_to': ['ghost_note'],
+    'icons': {
+        'ghost_note.GhostUser': 'fas fa-user',
+        'ghost_note.GhostAccessToken': 'fas fa-key',
+        'ghost_note.GhostReferralCommission': 'fas fa-hand-holding-usd',
+        'ghost_note.GhostSession': 'fas fa-desktop',
+    },
+    'custom_css': 'ghost_note/admin/referrals.css',
+}
