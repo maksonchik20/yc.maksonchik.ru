@@ -1,0 +1,25 @@
+.ghost-referral-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+}
+
+.ghost-referral-table th,
+.ghost-referral-table td {
+  border: 1px solid #dee2e6;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.ghost-referral-table thead th {
+  background: #f8f9fa;
+}
+
+.ghost-referral-table tfoot th {
+  background: #eef6ff;
+  font-weight: 600;
+}
+
+.ghost-referral-table a {
+  font-weight: 500;
+}
