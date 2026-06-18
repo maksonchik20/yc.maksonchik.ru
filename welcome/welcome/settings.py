@@ -120,4 +120,5 @@ JAZZMIN_SETTINGS = {
         'ghost_note.GhostSession': 'fas fa-desktop',
     },
     'custom_css': 'ghost_note/admin/referrals.css',
+    'custom_js': 'ghost_note/admin/token_form.js',
 }

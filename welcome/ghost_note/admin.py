@@ -294,8 +294,6 @@ class GhostUserAdmin(admin.ModelAdmin):
 @admin.register(GhostAccessToken)
 class GhostAccessTokenAdmin(admin.ModelAdmin):
     form = GhostAccessTokenAdminForm
-    change_form_template = 'admin/ghost_note/ghostaccesstoken/change_form.html'
-    add_form_template = 'admin/ghost_note/ghostaccesstoken/change_form.html'
     list_display = (
         'token_preview',
         'user',
