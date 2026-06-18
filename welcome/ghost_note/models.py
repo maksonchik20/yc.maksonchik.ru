@@ -104,7 +104,8 @@ class GhostAccessToken(models.Model):
     token = models.CharField(
         max_length=64,
         unique=True,
-        default=generate_access_token,
+        blank=True,
+        default='',
         editable=False,
         verbose_name='Токен',
     )
@@ -171,9 +172,12 @@ class GhostAccessToken(models.Model):
         )
 
     def save(self, *args, **kwargs):
+        if not self.token:
+            self.token = generate_access_token()
         if self.token_type == self.TokenType.TEST:
             self.payment_amount = None
-            self.apply_test_token_schedule()
+            if self.pk is None:
+                self.apply_test_token_schedule()
         self.sync_label_from_user()
         super().save(*args, **kwargs)
         self.sync_referral_commission()

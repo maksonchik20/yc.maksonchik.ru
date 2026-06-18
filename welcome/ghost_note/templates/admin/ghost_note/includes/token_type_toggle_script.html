@@ -29,21 +29,6 @@
     );
   }
 
-  function dateGroupsForSelect(select) {
-    if (!select || !select.form || select.name !== 'token_type') {
-      return [];
-    }
-    var groups = [];
-    ['starts_at', 'expires_at'].forEach(function (fieldName) {
-      var input = select.form.querySelector('#id_' + fieldName + '_0, #id_' + fieldName);
-      var group = paymentContainerForInput(input);
-      if (group) {
-        groups.push(group);
-      }
-    });
-    return groups;
-  }
-
   window.ghostNoteToggleTokenType = function (select) {
     if (!select) {
       return;
@@ -62,12 +47,6 @@
         paymentInput.value = '';
       }
     }
-
-    dateGroupsForSelect(select).forEach(function (group) {
-      group.querySelectorAll('input, select, textarea').forEach(function (input) {
-        input.disabled = isTest;
-      });
-    });
   };
 
   function initAll() {
