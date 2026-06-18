@@ -16,11 +16,14 @@ from .models import (
     GhostSession,
     GhostTextMessage,
     GhostUser,
+    TEST_TOKEN_DURATION,
 )
 
 MSK_DATE_INPUT_FORMATS = ['%d.%m.%Y', '%Y-%m-%d']
 MSK_TIME_INPUT_FORMATS = ['%H:%M', '%H:%M:%S']
-TOKEN_TYPE_CHANGE_HANDLER = 'if(window.ghostNoteToggleTokenType)window.ghostNoteToggleTokenType(this)'
+TOKEN_TYPE_CHANGE_HANDLER = (
+    'if(window.ghostNoteToggleTokenType)window.ghostNoteToggleTokenType(this,true)'
+)
 
 
 def _apply_token_type_onchange(field):
@@ -61,10 +64,10 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
         token_type = self._current_token_type()
         self.fields['payment_amount'].label = 'Сумма оплаты'
         self.fields['starts_at'].help_text = (
-            'Для тестового токена при создании выставляется автоматически: сейчас.'
+            'Для тестового токена при выборе типа подставляется автоматически: сейчас. Можно изменить вручную.'
         )
         self.fields['expires_at'].help_text = (
-            'Для тестового токена при создании: сейчас + 1,5 часа.'
+            'Для тестового токена при выборе типа подставляется: сейчас + 1 час. Можно изменить вручную.'
         )
         if token_type == GhostAccessToken.TokenType.TEST:
             self.fields['payment_amount'].required = False
@@ -84,10 +87,15 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
         expires_at = cleaned.get('expires_at')
         if token_type == GhostAccessToken.TokenType.TEST:
             cleaned['payment_amount'] = None
-            if not self.instance.pk:
-                now = timezone.now()
+            now = timezone.now()
+            if not starts_at:
                 cleaned['starts_at'] = now
-                cleaned['expires_at'] = now + timezone.timedelta(hours=1, minutes=30)
+            if not expires_at:
+                cleaned['expires_at'] = cleaned['starts_at'] + TEST_TOKEN_DURATION
+            starts_at = cleaned.get('starts_at')
+            expires_at = cleaned.get('expires_at')
+            if starts_at and expires_at and starts_at >= expires_at:
+                raise ValidationError('Время начала должно быть раньше времени окончания.')
         elif token_type == GhostAccessToken.TokenType.REAL:
             payment_amount = cleaned.get('payment_amount')
             if payment_amount is None:
@@ -404,8 +412,6 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
     def save_model(self, request, obj, form, change):
         if obj.token_type == GhostAccessToken.TokenType.TEST:
             obj.payment_amount = None
-            if not change:
-                obj.apply_test_token_schedule()
         obj.sync_label_from_user()
         super().save_model(request, obj, form, change)
 

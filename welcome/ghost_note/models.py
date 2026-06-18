@@ -11,7 +11,7 @@ from .referrals import calculate_commission
 
 ACCESS_TOKEN_LENGTH = 6
 ACCESS_TOKEN_ALPHABET = string.ascii_uppercase + string.digits
-TEST_TOKEN_DURATION = timezone.timedelta(hours=1, minutes=30)
+TEST_TOKEN_DURATION = timezone.timedelta(hours=1)
 
 
 def new_session_id():
@@ -176,8 +176,6 @@ class GhostAccessToken(models.Model):
             self.token = generate_access_token()
         if self.token_type == self.TokenType.TEST:
             self.payment_amount = None
-            if self.pk is None:
-                self.apply_test_token_schedule()
         self.sync_label_from_user()
         super().save(*args, **kwargs)
         self.sync_referral_commission()

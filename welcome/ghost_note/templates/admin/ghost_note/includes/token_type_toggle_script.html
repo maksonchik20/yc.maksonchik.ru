@@ -2,6 +2,31 @@
 (function () {
   'use strict';
 
+  var TEST_DURATION_MS = 60 * 60 * 1000;
+
+  function pad2(value) {
+    return String(value).padStart(2, '0');
+  }
+
+  function formatAdminDate(date) {
+    return pad2(date.getDate()) + '.' + pad2(date.getMonth() + 1) + '.' + date.getFullYear();
+  }
+
+  function formatAdminTime(date) {
+    return pad2(date.getHours()) + ':' + pad2(date.getMinutes());
+  }
+
+  function setSplitDateTime(fieldPrefix, date) {
+    var dateInput = document.getElementById('id_' + fieldPrefix + '_0');
+    var timeInput = document.getElementById('id_' + fieldPrefix + '_1');
+    if (dateInput) {
+      dateInput.value = formatAdminDate(date);
+    }
+    if (timeInput) {
+      timeInput.value = formatAdminTime(date);
+    }
+  }
+
   function paymentInputForSelect(select) {
     if (!select || !select.form) {
       return null;
@@ -29,7 +54,17 @@
     );
   }
 
-  window.ghostNoteToggleTokenType = function (select) {
+  function applyTestSchedule(select) {
+    if (!select || select.name !== 'token_type') {
+      return;
+    }
+    var now = new Date();
+    var end = new Date(now.getTime() + TEST_DURATION_MS);
+    setSplitDateTime('starts_at', now);
+    setSplitDateTime('expires_at', end);
+  }
+
+  window.ghostNoteToggleTokenType = function (select, applySchedule) {
     if (!select) {
       return;
     }
@@ -47,11 +82,15 @@
         paymentInput.value = '';
       }
     }
+
+    if (applySchedule && isTest) {
+      applyTestSchedule(select);
+    }
   };
 
   function initAll() {
     document.querySelectorAll('select[name="token_type"], select[name$="-token_type"]').forEach(function (select) {
-      window.ghostNoteToggleTokenType(select);
+      window.ghostNoteToggleTokenType(select, false);
     });
   }
 
@@ -63,7 +102,7 @@
       'change.ghostNoteTokenType select2:select.ghostNoteTokenType',
       'select[name="token_type"], select[name$="-token_type"]',
       function () {
-        window.ghostNoteToggleTokenType(this);
+        window.ghostNoteToggleTokenType(this, true);
       }
     );
     if (window.django && window.django.jQuery) {
