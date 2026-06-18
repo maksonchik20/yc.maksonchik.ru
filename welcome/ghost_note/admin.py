@@ -20,6 +20,11 @@ from .models import (
 
 MSK_DATE_INPUT_FORMATS = ['%d.%m.%Y', '%Y-%m-%d']
 MSK_TIME_INPUT_FORMATS = ['%H:%M', '%H:%M:%S']
+TOKEN_TYPE_CHANGE_HANDLER = 'if(window.ghostNoteToggleTokenType)window.ghostNoteToggleTokenType(this)'
+
+
+def _apply_token_type_onchange(field):
+    field.widget.attrs['onchange'] = TOKEN_TYPE_CHANGE_HANDLER
 
 
 class GhostAccessTokenAdminForm(forms.ModelForm):
@@ -67,6 +72,7 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
             self.fields['expires_at'].disabled = True
         else:
             self.fields['payment_amount'].required = True
+        _apply_token_type_onchange(self.fields['token_type'])
 
     def clean(self):
         cleaned = super().clean()
@@ -144,8 +150,20 @@ def _format_telegram_link(user):
     )
 
 
+class GhostAccessTokenInlineForm(forms.ModelForm):
+    class Meta:
+        model = GhostAccessToken
+        fields = '__all__'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if 'token_type' in self.fields:
+            _apply_token_type_onchange(self.fields['token_type'])
+
+
 class GhostAccessTokenInline(admin.TabularInline):
     model = GhostAccessToken
+    form = GhostAccessTokenInlineForm
     extra = 0
     fields = (
         'token_type',
@@ -182,6 +200,8 @@ class GhostAccessTokenInline(admin.TabularInline):
 
 @admin.register(GhostUser)
 class GhostUserAdmin(admin.ModelAdmin):
+    change_form_template = 'admin/ghost_note/ghost_admin_change_form.html'
+    add_form_template = 'admin/ghost_note/ghost_admin_change_form.html'
     list_display = (
         'name',
         'telegram_link_display',
@@ -294,6 +314,8 @@ class GhostUserAdmin(admin.ModelAdmin):
 @admin.register(GhostAccessToken)
 class GhostAccessTokenAdmin(admin.ModelAdmin):
     form = GhostAccessTokenAdminForm
+    change_form_template = 'admin/ghost_note/ghost_admin_change_form.html'
+    add_form_template = 'admin/ghost_note/ghost_admin_change_form.html'
     list_display = (
         'token_preview',
         'user',

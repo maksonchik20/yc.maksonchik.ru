@@ -1,0 +1,6 @@
+{% extends "admin/change_form.html" %}
+
+{% block extrajs %}
+    {{ block.super }}
+    {% include "admin/ghost_note/includes/token_type_toggle_script.html" %}
+{% endblock %}
