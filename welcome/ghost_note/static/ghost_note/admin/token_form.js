@@ -1,63 +1,59 @@
 (function () {
   'use strict';
 
-  function isTestType(value) {
-    return value === 'test';
-  }
-
-  function setFieldVisible(fieldRow, visible) {
-    if (!fieldRow) {
+  function waitForDjangoJQuery(callback) {
+    if (window.django && django.jQuery) {
+      callback(django.jQuery);
       return;
     }
-    fieldRow.style.display = visible ? '' : 'none';
+    window.setTimeout(function () {
+      waitForDjangoJQuery(callback);
+    }, 50);
   }
 
-  function setFieldDisabled(fieldRow, disabled) {
-    if (!fieldRow) {
-      return;
-    }
-    fieldRow.querySelectorAll('input, select, textarea').forEach(function (input) {
-      input.disabled = disabled;
-    });
-  }
+  waitForDjangoJQuery(function ($) {
+    var FORM_SELECTOR = '#ghostaccesstoken_form';
 
-  function toggleTokenForm(form) {
-    var typeSelect = form.querySelector('[name="token_type"]');
-    if (!typeSelect) {
-      return;
+    function fieldGroup(fieldName) {
+      return $(FORM_SELECTOR + ' .form-group.field-' + fieldName);
     }
 
-    var isTest = isTestType(typeSelect.value);
-    var paymentRow = form.querySelector('.field-payment_amount');
-    var startsRow = form.querySelector('.field-starts_at');
-    var expiresRow = form.querySelector('.field-expires_at');
-
-    setFieldVisible(paymentRow, !isTest);
-    setFieldDisabled(startsRow, isTest);
-    setFieldDisabled(expiresRow, isTest);
-
-    if (paymentRow) {
-      paymentRow.querySelectorAll('input').forEach(function (input) {
-        input.required = !isTest;
-      });
-    }
-  }
-
-  function initTokenForms() {
-    document.querySelectorAll('#ghostaccesstoken_form, form').forEach(function (form) {
-      if (!form.querySelector('[name="token_type"]')) {
+    function toggleTokenTypeFields() {
+      var $form = $(FORM_SELECTOR);
+      if (!$form.length) {
         return;
       }
-      toggleTokenForm(form);
-      form.querySelector('[name="token_type"]').addEventListener('change', function () {
-        toggleTokenForm(form);
-      });
-    });
-  }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initTokenForms);
-  } else {
-    initTokenForms();
-  }
+      var isTest = $form.find('#id_token_type').val() === 'test';
+      var $paymentGroup = fieldGroup('payment_amount');
+      var $paymentInput = $form.find('#id_payment_amount');
+
+      if (isTest) {
+        $paymentGroup.addClass('d-none');
+        $paymentInput.prop('required', false).prop('disabled', true).val('');
+      } else {
+        $paymentGroup.removeClass('d-none');
+        $paymentInput.prop('required', true).prop('disabled', false);
+      }
+
+      fieldGroup('starts_at')
+        .add(fieldGroup('expires_at'))
+        .find('input, select')
+        .prop('disabled', isTest);
+    }
+
+    function bindTokenTypeToggle() {
+      var $form = $(FORM_SELECTOR);
+      if (!$form.length) {
+        return;
+      }
+
+      var $tokenType = $form.find('#id_token_type');
+      toggleTokenTypeFields();
+      $tokenType.off('.ghostTokenType');
+      $tokenType.on('change.ghostTokenType select2:select.ghostTokenType', toggleTokenTypeFields);
+    }
+
+    $(bindTokenTypeToggle);
+  });
 })();

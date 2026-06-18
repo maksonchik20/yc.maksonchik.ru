@@ -1,0 +1,7 @@
+{% extends "admin/change_form.html" %}
+{% load static %}
+
+{% block extrajs %}
+    {{ block.super }}
+    <script src="{% static 'ghost_note/admin/token_form.js' %}"></script>
+{% endblock %}

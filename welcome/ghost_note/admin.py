@@ -294,6 +294,8 @@ class GhostUserAdmin(admin.ModelAdmin):
 @admin.register(GhostAccessToken)
 class GhostAccessTokenAdmin(admin.ModelAdmin):
     form = GhostAccessTokenAdminForm
+    change_form_template = 'admin/ghost_note/ghostaccesstoken/change_form.html'
+    add_form_template = 'admin/ghost_note/ghostaccesstoken/change_form.html'
     list_display = (
         'token_preview',
         'user',
@@ -367,9 +369,6 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
         )
 
     viewer_link.short_description = 'Ссылка viewer'
-
-    class Media:
-        js = ('ghost_note/admin/token_form.js',)
 
     def get_changeform_initial_data(self, request):
         initial = super().get_changeform_initial_data(request)
