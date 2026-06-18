@@ -42,16 +42,29 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
         model = GhostAccessToken
         fields = '__all__'
 
+    def _current_token_type(self):
+        if self.data.get('token_type'):
+            return self.data['token_type']
+        if self.initial.get('token_type'):
+            return self.initial['token_type']
+        if self.instance.pk:
+            return self.instance.token_type
+        return GhostAccessToken.TokenType.REAL
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        token_type = self.initial.get('token_type') or getattr(self.instance, 'token_type', None)
+        token_type = self._current_token_type()
+        self.fields['payment_amount'].label = 'Сумма оплаты'
+        self.fields['starts_at'].help_text = (
+            'Для тестового токена выставляется автоматически: сейчас.'
+        )
+        self.fields['expires_at'].help_text = (
+            'Для тестового токена: сейчас + 1,5 часа.'
+        )
         if token_type == GhostAccessToken.TokenType.TEST:
-            self.fields['payment_amount'].widget = forms.HiddenInput()
             self.fields['payment_amount'].required = False
             self.fields['starts_at'].disabled = True
             self.fields['expires_at'].disabled = True
-            self.fields['starts_at'].help_text = 'Для тестового токена выставляется автоматически: сейчас.'
-            self.fields['expires_at'].help_text = 'Для тестового токена: сейчас + 1,5 часа.'
         else:
             self.fields['payment_amount'].required = True
 
@@ -355,12 +368,15 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
 
     viewer_link.short_description = 'Ссылка viewer'
 
+    class Media:
+        js = ('ghost_note/admin/token_form.js',)
+
     def get_changeform_initial_data(self, request):
         initial = super().get_changeform_initial_data(request)
         now = timezone.now()
-        initial.setdefault('token_type', GhostAccessToken.TokenType.TEST)
+        initial.setdefault('token_type', GhostAccessToken.TokenType.REAL)
         initial.setdefault('starts_at', now)
-        initial.setdefault('expires_at', now + timezone.timedelta(hours=1, minutes=30))
+        initial.setdefault('expires_at', now + timezone.timedelta(days=30))
         return initial
 
     def save_model(self, request, obj, form, change):
