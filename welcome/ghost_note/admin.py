@@ -131,6 +131,42 @@ def _format_telegram_link(user):
     )
 
 
+class GhostAccessTokenInline(admin.TabularInline):
+    model = GhostAccessToken
+    extra = 0
+    fields = (
+        'token_type',
+        'token',
+        'payment_amount',
+        'starts_at_msk',
+        'expires_at_msk',
+        'is_active',
+        'viewer_link',
+    )
+    readonly_fields = ('token', 'starts_at_msk', 'expires_at_msk', 'viewer_link')
+    show_change_link = True
+
+    @admin.display(description='Действителен с')
+    def starts_at_msk(self, obj):
+        return format_token_datetime(obj.starts_at)
+
+    @admin.display(description='Действителен до')
+    def expires_at_msk(self, obj):
+        return format_token_datetime(obj.expires_at)
+
+    def viewer_link(self, obj):
+        from urllib.parse import quote
+
+        if not obj.token:
+            return '—'
+        return format_html(
+            '<a href="/ghost/viewer/?token={}" target="_blank">viewer</a>',
+            quote(obj.token, safe=''),
+        )
+
+    viewer_link.short_description = 'Viewer'
+
+
 @admin.register(GhostUser)
 class GhostUserAdmin(admin.ModelAdmin):
     list_display = (
@@ -240,42 +276,6 @@ class GhostUserAdmin(admin.ModelAdmin):
             format_html(''.join(str(row) for row in rows)),
             _format_money(obj.total_commission()),
         )
-
-
-class GhostAccessTokenInline(admin.TabularInline):
-    model = GhostAccessToken
-    extra = 0
-    fields = (
-        'token_type',
-        'token',
-        'payment_amount',
-        'starts_at_msk',
-        'expires_at_msk',
-        'is_active',
-        'viewer_link',
-    )
-    readonly_fields = ('token', 'starts_at_msk', 'expires_at_msk', 'viewer_link')
-    show_change_link = True
-
-    @admin.display(description='Действителен с')
-    def starts_at_msk(self, obj):
-        return format_token_datetime(obj.starts_at)
-
-    @admin.display(description='Действителен до')
-    def expires_at_msk(self, obj):
-        return format_token_datetime(obj.expires_at)
-
-    def viewer_link(self, obj):
-        from urllib.parse import quote
-
-        if not obj.token:
-            return '—'
-        return format_html(
-            '<a href="/ghost/viewer/?token={}" target="_blank">viewer</a>',
-            quote(obj.token, safe=''),
-        )
-
-    viewer_link.short_description = 'Viewer'
 
 
 @admin.register(GhostAccessToken)
