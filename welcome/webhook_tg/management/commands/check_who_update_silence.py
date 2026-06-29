@@ -6,9 +6,8 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from env import OWNER_CHAT_ID
 from webhook_tg.models import WhoUpdateBotEvent
-from webhook_tg.telegram import tg_send_message
+from webhook_tg.owner_notify import notify_owner
 
 
 def in_monitoring_window(now):
@@ -40,8 +39,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **opts):
         if opts["test_notify"]:
-            tg_send_message(
-                OWNER_CHAT_ID,
+            notify_owner(
                 "🧪 Тест: мониторинг WhoUpdateBot подключён (yc.maksonchik.ru)",
             )
             self.stdout.write("test notification sent")
@@ -84,7 +82,7 @@ class Command(BaseCommand):
             "⚠️ WhoUpdateBot: за последний час нет новых сообщений.\n"
             f"Последнее событие: {last_str} (MSK)"
         )
-        tg_send_message(OWNER_CHAT_ID, text)
+        notify_owner(text)
 
         state["last_alert"] = now_ts
         os.makedirs(os.path.dirname(state_file), exist_ok=True)
