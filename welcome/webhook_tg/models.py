@@ -76,3 +76,38 @@ class Message(models.Model):
     class Meta:
         verbose_name = "Сообщение"
         verbose_name_plural = "Сообщения"
+
+
+class WhoUpdateBotEvent(models.Model):
+    chat_id = models.BigIntegerField(verbose_name="Chat id", null=True, blank=True)
+    message_id = models.BigIntegerField(verbose_name="Message id", null=True, blank=True)
+    business_connection_id = models.CharField(
+        verbose_name="Business connection id",
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    username_from = models.CharField(
+        verbose_name="Username",
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    first_name = models.CharField(
+        verbose_name="First name",
+        max_length=255,
+        blank=True,
+        default="",
+    )
+    payload = models.TextField(verbose_name="Payload", blank=True, default="")
+    received_at = models.DateTimeField(verbose_name="Получено", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Событие WhoUpdateBot"
+        verbose_name_plural = "События WhoUpdateBot"
+        indexes = [
+            models.Index(fields=["-received_at"]),
+        ]
+
+    def __str__(self):
+        return f"chat={self.chat_id} msg={self.message_id} @ {self.received_at}"

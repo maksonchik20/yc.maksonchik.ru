@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.db.models import Q
-from .models import Message, UserTg, AdminChatFilter
+from .models import Message, UserTg, AdminChatFilter, WhoUpdateBotEvent
 
 HIDDEN_USERNAMES = {"@tamataeva86", }
 
@@ -39,6 +39,15 @@ class AdminChatFilterAdmin(admin.ModelAdmin):
     list_filter = ("chat_id", "business_connection_id")
     search_fields = ("user__username", "business_connection_id")
     autocomplete_fields = ("user",)
+
+
+@admin.register(WhoUpdateBotEvent)
+class WhoUpdateBotEventAdmin(admin.ModelAdmin):
+    list_display = ("received_at", "chat_id", "message_id", "username_from", "business_connection_id")
+    list_filter = ("received_at",)
+    search_fields = ("chat_id", "message_id", "username_from", "business_connection_id")
+    ordering = ("-received_at",)
+    readonly_fields = ("received_at",)
 
 
 admin.site.register(UserTg)

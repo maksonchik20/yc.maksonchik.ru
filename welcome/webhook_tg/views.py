@@ -1,7 +1,7 @@
 from django.http import HttpResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 import json
-from .models import UserTg, Message, FileType
+from .models import UserTg, Message, FileType, WhoUpdateBotEvent
 import html
 from .telegram import (
     tg_send_message,
@@ -339,3 +339,30 @@ def is_new_message(data):
 
 def is_deleted_message(data):
     return data.get("deleted_business_messages") is not None or data.get("deleted_messages") is not None
+
+
+@csrf_exempt
+def who_update_event(request: HttpRequest):
+    if request.method != "POST":
+        return HttpResponse(status=405)
+    try:
+        from env import WHO_UPDATE_EVENT_TOKEN
+    except ImportError:
+        WHO_UPDATE_EVENT_TOKEN = ""
+    token = request.headers.get("X-Who-Update-Token", "")
+    if not WHO_UPDATE_EVENT_TOKEN or token != WHO_UPDATE_EVENT_TOKEN:
+        return HttpResponse(status=403)
+    try:
+        data = json.loads(request.body.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return HttpResponse(status=400)
+
+    WhoUpdateBotEvent.objects.create(
+        chat_id=data.get("chat_id"),
+        message_id=data.get("message_id"),
+        business_connection_id=data.get("business_connection_id") or "",
+        username_from=data.get("username_from") or "",
+        first_name=data.get("first_name") or "",
+        payload=json.dumps(data, ensure_ascii=False),
+    )
+    return HttpResponse("ok")
