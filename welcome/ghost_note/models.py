@@ -11,7 +11,8 @@ from .referrals import calculate_commission
 
 ACCESS_TOKEN_LENGTH = 6
 ACCESS_TOKEN_ALPHABET = string.ascii_uppercase + string.digits
-TEST_TOKEN_DURATION = timezone.timedelta(hours=1)
+TEST_TOKEN_DURATION = timezone.timedelta(minutes=20)
+TEST_TOKEN_COOLDOWN = timezone.timedelta(days=7)
 
 
 def new_session_id():
@@ -27,6 +28,21 @@ def generate_access_token():
         if not GhostAccessToken.objects.filter(token=token).exists():
             return token
     raise RuntimeError('Unable to generate a unique access token')
+
+
+REFERRAL_KEY_LENGTH = 8
+REFERRAL_KEY_ALPHABET = string.ascii_uppercase + string.digits
+
+
+def generate_referral_key():
+    for _ in range(64):
+        key = ''.join(
+            secrets.choice(REFERRAL_KEY_ALPHABET)
+            for _ in range(REFERRAL_KEY_LENGTH)
+        )
+        if not GhostUser.objects.filter(referral_key=key).exists():
+            return key
+    raise RuntimeError('Unable to generate a unique referral key')
 
 
 class GhostUser(models.Model):
@@ -46,6 +62,14 @@ class GhostUser(models.Model):
         verbose_name='Пригласил',
     )
     notes = models.TextField(blank=True, verbose_name='Заметки')
+    referral_key = models.CharField(
+        max_length=16,
+        unique=True,
+        blank=True,
+        default='',
+        editable=False,
+        verbose_name='Реферальный ключ',
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создан')
 
     class Meta:
@@ -67,11 +91,47 @@ class GhostUser(models.Model):
         total = self.commissions_earned.aggregate(total=models.Sum('commission_amount'))['total']
         return total or Decimal('0.00')
 
+    def unpaid_commission_total(self):
+        total = self.commissions_earned.filter(is_paid=False).aggregate(
+            total=models.Sum('commission_amount')
+        )['total']
+        return total or Decimal('0.00')
+
+    def paid_commission_total(self):
+        total = self.commissions_earned.filter(is_paid=True).aggregate(
+            total=models.Sum('commission_amount')
+        )['total']
+        return total or Decimal('0.00')
+
     def commission_from_user(self, referred_user):
         total = self.commissions_earned.filter(referred_user=referred_user).aggregate(
             total=models.Sum('commission_amount')
         )['total']
         return total or Decimal('0.00')
+
+    def sync_referral_commissions(self):
+        for token in self.tokens.filter(token_type='real'):
+            token.sync_referral_commission()
+
+    def save(self, *args, **kwargs):
+        referred_by_changed = False
+        if self.pk:
+            old_referred_by_id = (
+                GhostUser.objects.filter(pk=self.pk)
+                .values_list('referred_by_id', flat=True)
+                .first()
+            )
+            referred_by_changed = old_referred_by_id != self.referred_by_id
+        else:
+            referred_by_changed = bool(self.referred_by_id)
+
+        if not self.referral_key:
+            self.referral_key = generate_referral_key()
+
+        super().save(*args, **kwargs)
+
+        if referred_by_changed:
+            self.sync_referral_commissions()
 
 
 class GhostAccessToken(models.Model):
@@ -181,6 +241,211 @@ class GhostAccessToken(models.Model):
         self.sync_referral_commission()
 
 
+class GhostPurchaseOrder(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Ожидает оплаты'
+        PAID = 'paid', 'Оплачен'
+        CANCELED = 'canceled', 'Отменён'
+        FAILED = 'failed', 'Ошибка'
+
+    class AccessType(models.TextChoices):
+        LOCAL = 'local', 'Локальный доступ'
+        REMOTE = 'remote', 'Удалённый доступ'
+
+    public_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    customer_name = models.CharField(max_length=128, verbose_name='Имя покупателя')
+    customer_telegram = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        verbose_name='Telegram покупателя',
+    )
+    customer_email = models.EmailField(
+        blank=True,
+        default='',
+        verbose_name='E-mail покупателя',
+    )
+    referral_key_input = models.CharField(
+        max_length=16,
+        blank=True,
+        verbose_name='Введённый реферальный ключ',
+    )
+    referrer = models.ForeignKey(
+        GhostUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='purchase_referrals',
+        verbose_name='Пригласивший',
+    )
+    user = models.ForeignKey(
+        GhostUser,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='purchase_orders',
+        verbose_name='Пользователь',
+    )
+    access_type = models.CharField(
+        max_length=8,
+        choices=AccessType.choices,
+        verbose_name='Тип доступа',
+    )
+    duration_minutes = models.PositiveSmallIntegerField(verbose_name='Длительность (мин)')
+    starts_at = models.DateTimeField(verbose_name='Начало доступа')
+    amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Сумма')
+    yookassa_payment_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='ID платежа ЮKassa',
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.PENDING,
+        verbose_name='Статус',
+    )
+    token = models.OneToOneField(
+        GhostAccessToken,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='purchase_order',
+        verbose_name='Выданный токен',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    paid_at = models.DateTimeField(null=True, blank=True)
+    telegram_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Токен отправлен в Telegram',
+    )
+    telegram_notify_error = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='Ошибка отправки в Telegram',
+    )
+    email_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Токен отправлен на e-mail',
+    )
+    email_notify_error = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='Ошибка отправки на e-mail',
+    )
+    referrer_notified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Пригласивший уведомлён в Telegram',
+    )
+    referrer_notify_error = models.CharField(
+        max_length=500,
+        blank=True,
+        default='',
+        verbose_name='Ошибка уведомления пригласившего',
+    )
+
+    class Meta:
+        verbose_name = 'Заказ Ghost Note'
+        verbose_name_plural = 'Заказы Ghost Note'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.customer_name} — {self.get_access_type_display()} ({self.get_status_display()})'
+
+
+class GhostTelegramContact(models.Model):
+    telegram_user_id = models.BigIntegerField(unique=True, verbose_name='Telegram chat_id')
+    username = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Username',
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    last_trial_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name='Последний пробный доступ',
+    )
+
+    class Meta:
+        verbose_name = 'Telegram-контакт Ghost Note'
+        verbose_name_plural = 'Telegram-контакты Ghost Note'
+
+    def __str__(self):
+        if self.username:
+            return f'@{self.username} ({self.telegram_user_id})'
+        return str(self.telegram_user_id)
+
+
+class GhostTelegramBotMessage(models.Model):
+    class Direction(models.TextChoices):
+        IN = 'in', 'Входящее'
+        OUT = 'out', 'Исходящее'
+
+    class MessageKind(models.TextChoices):
+        TEXT = 'text', 'Текст'
+        CALLBACK = 'callback', 'Callback'
+        DOCUMENT = 'document', 'Документ'
+        OTHER = 'other', 'Другое'
+
+    telegram_user_id = models.BigIntegerField(db_index=True, verbose_name='Telegram chat_id')
+    username = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        db_index=True,
+        verbose_name='Username',
+    )
+    first_name = models.CharField(max_length=128, blank=True, default='', verbose_name='Имя')
+    direction = models.CharField(max_length=3, choices=Direction.choices, verbose_name='Направление')
+    message_kind = models.CharField(
+        max_length=16,
+        choices=MessageKind.choices,
+        default=MessageKind.TEXT,
+        verbose_name='Тип',
+    )
+    text = models.TextField(blank=True, default='', verbose_name='Текст')
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True, verbose_name='Когда')
+
+    class Meta:
+        verbose_name = 'Сообщение Ghost Note бота'
+        verbose_name_plural = 'Сообщения Ghost Note бота'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['username', 'created_at']),
+            models.Index(fields=['telegram_user_id', 'created_at']),
+        ]
+
+    def __str__(self):
+        who = f'@{self.username}' if self.username else str(self.telegram_user_id)
+        arrow = '→' if self.direction == self.Direction.OUT else '←'
+        preview = (self.text or '')[:60]
+        return f'{arrow} {who}: {preview}'
+
+
+class GhostReferralPayout(GhostUser):
+    class Meta:
+        proxy = True
+        verbose_name = 'Выплата рефералу'
+        verbose_name_plural = 'Выплаты рефералам'
+
+
+class GhostRealPayment(GhostAccessToken):
+    class Meta:
+        proxy = True
+        verbose_name = 'Реальная оплата'
+        verbose_name_plural = 'Реальные оплаты'
+
+
 class GhostReferralCommission(models.Model):
     referrer = models.ForeignKey(
         GhostUser,
@@ -202,6 +467,7 @@ class GhostReferralCommission(models.Model):
     )
     payment_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Сумма покупки')
     commission_amount = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Комиссия (20%)')
+    is_paid = models.BooleanField(default=False, verbose_name='Выплачено')
     created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
 
     class Meta:

@@ -1,0 +1,119 @@
+<script>
+(function () {
+  'use strict';
+
+  function getCsrfToken(form) {
+    var input = form.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (input && input.value) {
+      return input.value;
+    }
+    var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function setStatus(text, isError) {
+    var status = document.getElementById('ghost-chat-send-status');
+    if (!status) {
+      return;
+    }
+    status.textContent = text || '';
+    status.classList.toggle('is-error', Boolean(isError));
+  }
+
+  function scrollMessagesToBottom() {
+    var container = document.getElementById('ghost-chat-messages');
+    if (!container) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+  }
+
+  document.addEventListener('DOMContentLoaded', function () {
+    scrollMessagesToBottom();
+  });
+
+  document.addEventListener('submit', function (event) {
+    var form = event.target;
+    if (!form.matches('#ghost-chat-send-form')) {
+      return;
+    }
+
+    event.preventDefault();
+
+    var url = form.dataset.sendUrl;
+    var textarea = form.querySelector('textarea[name="text"]');
+    var button = form.querySelector('button[type="submit"]');
+    if (!url || !textarea) {
+      return;
+    }
+
+    var text = textarea.value.trim();
+    if (!text) {
+      setStatus('Введите текст сообщения.', true);
+      return;
+    }
+
+    var body = new URLSearchParams();
+    body.set('text', text);
+    if (form.dataset.telegramUserId) {
+      body.set('telegram_user_id', form.dataset.telegramUserId);
+    }
+    if (form.dataset.username) {
+      body.set('username', form.dataset.username);
+    }
+
+    button.disabled = true;
+    textarea.disabled = true;
+    setStatus('Отправка…', false);
+
+    fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': getCsrfToken(form),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: body.toString(),
+    })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok || !data.ok) {
+            var errorText = (data && data.error) || 'send_failed';
+            if (errorText === 'chat_not_found') {
+              errorText = 'Не удалось определить chat_id пользователя.';
+            } else if (errorText === 'bot_not_configured') {
+              errorText = 'Telegram-бот не настроен.';
+            } else if (errorText === 'empty_text') {
+              errorText = 'Введите текст сообщения.';
+            } else if (errorText === 'too_long') {
+              errorText = 'Сообщение слишком длинное.';
+            }
+            throw new Error(errorText);
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        var container = document.getElementById('ghost-chat-messages');
+        if (container && data.message_html) {
+          if (container.textContent.trim() === 'Сообщений пока нет.') {
+            container.textContent = '';
+          }
+          container.insertAdjacentHTML('beforeend', data.message_html);
+          scrollMessagesToBottom();
+        }
+        textarea.value = '';
+        setStatus('Сообщение отправлено.', false);
+      })
+      .catch(function (error) {
+        setStatus(error.message || 'Не удалось отправить сообщение.', true);
+      })
+      .finally(function () {
+        button.disabled = false;
+        textarea.disabled = false;
+        textarea.focus();
+      });
+  });
+})();
+</script>

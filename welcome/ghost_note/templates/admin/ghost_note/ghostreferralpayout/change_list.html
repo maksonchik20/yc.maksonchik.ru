@@ -1,0 +1,19 @@
+{% extends "admin/change_list.html" %}
+
+{% block content %}
+<div class="ghost-payments-summary">
+    <div class="ghost-payments-summary__card">
+        <div class="ghost-payments-summary__label">К выплате всего</div>
+        <div class="ghost-payments-summary__value">{{ payouts_unpaid_total }}</div>
+    </div>
+    <div class="ghost-payments-summary__card">
+        <div class="ghost-payments-summary__label">Рефералов с долгом</div>
+        <div class="ghost-payments-summary__value">{{ payouts_users_count }}</div>
+    </div>
+    <div class="ghost-payments-summary__card">
+        <div class="ghost-payments-summary__label">Невыплаченных комиссий</div>
+        <div class="ghost-payments-summary__value">{{ payouts_unpaid_count }}</div>
+    </div>
+</div>
+{{ block.super }}
+{% endblock %}

@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}Ghost Note{% endblock %} — yc.maksonchik.ru</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f4f6f8;
+            --card: #ffffff;
+            --text: #1a1d21;
+            --muted: #5c6670;
+            --accent: #2563eb;
+            --border: #dde3ea;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        a { color: var(--accent); }
+        .wrap {
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 24px 20px 48px;
+        }
+        header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 24px;
+        }
+        header .wrap {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding-top: 16px;
+            padding-bottom: 16px;
+        }
+        .logo {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+        }
+        nav a {
+            margin-left: 18px;
+            text-decoration: none;
+            color: var(--muted);
+            font-weight: 500;
+        }
+        nav a:hover { color: var(--accent); }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-bottom: 20px;
+        }
+        h1 { margin-top: 0; font-size: 1.75rem; line-height: 1.25; }
+        h2 { font-size: 1.2rem; margin-top: 1.6em; }
+        h2:first-child { margin-top: 0; }
+        h3 { font-size: 1.05rem; margin-top: 1.4em; margin-bottom: 0.5em; }
+        .lead { font-size: 1.05rem; color: var(--muted); }
+        .contacts {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px 32px;
+            margin-top: 16px;
+        }
+        .contacts a, .contacts span {
+            display: block;
+            font-size: 1.05rem;
+            color: var(--text);
+            text-decoration: none;
+        }
+        .contacts small { display: block; color: var(--muted); margin-bottom: 4px; }
+        ul, ol { padding-left: 1.2em; }
+        li { margin-bottom: 0.35em; }
+        .price-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 0.98rem;
+        }
+        .price-table th, .price-table td {
+            border: 1px solid var(--border);
+            padding: 10px 14px;
+            text-align: left;
+        }
+        .price-table th {
+            background: #f8fafc;
+            font-weight: 600;
+        }
+        .price-table td:last-child { white-space: nowrap; }
+        .note-box {
+            background: #f8fafc;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 14px 16px;
+            font-size: 0.95rem;
+            color: var(--muted);
+        }
+        footer {
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            color: var(--muted);
+            font-size: 0.92rem;
+        }
+        footer p { margin: 0.35em 0; }
+        footer nav a {
+            margin-left: 0;
+            margin-right: 16px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .oferta-body h2 { font-size: 1.05rem; margin-top: 1.4em; }
+        .oferta-body p, .oferta-body li { font-size: 0.95rem; }
+    </style>
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <header>
+        <div class="wrap">
+            <a class="logo" href="/">{{ site.name }}</a>
+            <nav>
+                <a href="/">Услуги и тарифы</a>
+                <a href="/oferta/">Оферта</a>
+                <a href="/privacy/">Политика ПДн</a>
+            </nav>
+        </div>
+    </header>
+    <main class="wrap">
+        {% block content %}{% endblock %}
+        <footer>
+            <p><strong>Исполнитель:</strong> {{ site.status }}</p>
+            <p><strong>ИНН:</strong> {{ site.inn }}</p>
+            <p><strong>Телефон:</strong> <a href="tel:{{ site.phone_tel }}">{{ site.phone_display }}</a></p>
+            <p><strong>E-mail:</strong> <a href="mailto:{{ site.email }}">{{ site.email }}</a></p>
+            <p><strong>Сайт:</strong> <a href="{{ site.url }}">{{ site.url }}</a></p>
+            {% block footer_support %}{% endblock %}
+            <nav>
+                <a href="/oferta/">Публичная оферта</a>
+                <a href="/privacy/">Политика обработки персональных данных</a>
+            </nav>
+        </footer>
+    </main>
+</body>
+</html>

@@ -4,3 +4,4 @@ dataclasses
 openai
 pillow
 websockets>=10,<13
+requests>=2.28,<3

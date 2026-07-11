@@ -46,6 +46,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'main.context_processors.site_info',
             ],
         },
     },
@@ -111,13 +112,49 @@ JAZZMIN_SETTINGS = {
     'topmenu_links': [
         {'name': 'Пользователи', 'url': 'admin:ghost_note_ghostuser_changelist'},
         {'name': 'Токены', 'url': 'admin:ghost_note_ghostaccesstoken_changelist'},
+        {'name': 'Оплаты', 'url': 'admin:ghost_note_ghostrealpayment_changelist'},
+        {'name': 'Выплаты', 'url': 'admin:ghost_note_ghostreferralpayout_changelist'},
     ],
     'order_with_respect_to': ['ghost_note'],
     'icons': {
         'ghost_note.GhostUser': 'fas fa-user',
         'ghost_note.GhostAccessToken': 'fas fa-key',
+        'ghost_note.GhostRealPayment': 'fas fa-ruble-sign',
+        'ghost_note.GhostReferralPayout': 'fas fa-money-check-alt',
         'ghost_note.GhostReferralCommission': 'fas fa-hand-holding-usd',
         'ghost_note.GhostSession': 'fas fa-desktop',
     },
     'custom_css': 'ghost_note/admin/referrals.css',
 }
+
+try:
+    from env import YOOKASSA_SHOP_ID, YOOKASSA_SECRET_KEY
+except ImportError:
+    YOOKASSA_SHOP_ID = ''
+    YOOKASSA_SECRET_KEY = ''
+
+try:
+    from env import GHOST_NOTE_BOT_TOKEN, GHOST_NOTE_BOT_USERNAME, OWNER_CHAT_ID
+    from env import GHOST_NOTE_DOWNLOAD_URL, GHOST_NOTE_INSTALLER_FILE_ID
+except ImportError:
+    GHOST_NOTE_BOT_TOKEN = ''
+    GHOST_NOTE_BOT_USERNAME = ''
+    OWNER_CHAT_ID = ''
+    GHOST_NOTE_DOWNLOAD_URL = ''
+    GHOST_NOTE_INSTALLER_FILE_ID = ''
+
+GHOST_NOTE_ADMIN_CHAT_ID = OWNER_CHAT_ID
+
+try:
+    from env import EMAIL_HOST_USER, EMAIL_HOST_PASSWORD
+except ImportError:
+    EMAIL_HOST_USER = ''
+    EMAIL_HOST_PASSWORD = ''
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.mail.ru'
+EMAIL_PORT = 465
+EMAIL_USE_SSL = True
+EMAIL_USE_TLS = False
+DEFAULT_FROM_EMAIL = f'Ghost Note <{EMAIL_HOST_USER or "yalexer75@mail.ru"}>'
+SERVER_EMAIL = DEFAULT_FROM_EMAIL

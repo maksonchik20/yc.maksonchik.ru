@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  var TEST_DURATION_MS = 60 * 60 * 1000;
+  var TEST_DURATION_MS = 20 * 60 * 1000;
 
   function pad2(value) {
     return String(value).padStart(2, '0');
@@ -42,16 +42,32 @@
     return null;
   }
 
-  function paymentContainerForInput(input) {
+  function paymentFieldGroup(input) {
+    if (!input) {
+      return null;
+    }
+    return input.closest('.form-group.field-payment_amount') || input.closest('.form-group') || input;
+  }
+
+  function paymentStandaloneGroup(input) {
     if (!input) {
       return null;
     }
     return (
       input.closest('.form-group.field-payment_amount')
       || input.closest('.form-group')
-      || input.closest('td.field-payment_amount')
-      || input.closest('td')
     );
+  }
+
+  function paymentPlaceholder(cell) {
+    var el = cell.querySelector('.ghost-payment-placeholder');
+    if (!el) {
+      el = document.createElement('span');
+      el.className = 'ghost-payment-placeholder text-muted';
+      el.textContent = '—';
+      cell.appendChild(el);
+    }
+    return el;
   }
 
   function applyTestSchedule(select) {
@@ -70,11 +86,23 @@
     }
     var isTest = select.value === 'test';
     var paymentInput = paymentInputForSelect(select);
-    var paymentGroup = paymentContainerForInput(paymentInput);
+    var inlineCell = paymentInput && paymentInput.closest('td.field-payment_amount');
 
-    if (paymentGroup) {
-      paymentGroup.style.display = isTest ? 'none' : '';
+    if (inlineCell) {
+      // Tabular inline: never hide <td> — that breaks column alignment.
+      var fieldGroup = paymentFieldGroup(paymentInput);
+      var placeholder = paymentPlaceholder(inlineCell);
+      if (fieldGroup) {
+        fieldGroup.style.display = isTest ? 'none' : '';
+      }
+      placeholder.style.display = isTest ? '' : 'none';
+    } else {
+      var paymentGroup = paymentStandaloneGroup(paymentInput);
+      if (paymentGroup) {
+        paymentGroup.style.display = isTest ? 'none' : '';
+      }
     }
+
     if (paymentInput) {
       paymentInput.required = !isTest;
       paymentInput.disabled = isTest;

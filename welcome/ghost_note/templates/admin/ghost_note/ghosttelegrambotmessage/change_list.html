@@ -1,0 +1,116 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        .ghost-bot-chat {
+            max-width: 960px;
+            margin: 0 0 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+        }
+        .ghost-bot-chat h2 {
+            margin: 0 0 16px;
+            font-size: 1.1rem;
+        }
+        #ghost-chat-messages {
+            max-height: 60vh;
+            overflow-y: auto;
+            margin-bottom: 16px;
+            padding-right: 4px;
+        }
+        .ghost-chat-row {
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            max-width: 85%;
+        }
+        .ghost-chat-in {
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            margin-right: auto;
+        }
+        .ghost-chat-out {
+            background: #e7f1ff;
+            border: 1px solid #b6d4fe;
+            margin-left: auto;
+        }
+        .ghost-chat-meta {
+            font-size: 0.78rem;
+            color: #6c757d;
+            margin-bottom: 6px;
+        }
+        .ghost-chat-text {
+            white-space: normal;
+            word-break: break-word;
+        }
+        .ghost-chat-compose {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+        .ghost-chat-compose textarea {
+            flex: 1;
+            min-height: 72px;
+            resize: vertical;
+            padding: 10px 12px;
+            border: 1px solid #ced4da;
+            border-radius: 8px;
+            font: inherit;
+        }
+        .ghost-chat-compose button {
+            white-space: nowrap;
+        }
+        .ghost-chat-compose-status {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        .ghost-chat-compose-status.is-error {
+            color: #b02a37;
+        }
+    </style>
+{% endblock %}
+
+{% block extrajs %}
+    {{ block.super }}
+    {% if ghost_chat_mode %}
+        {% include "admin/ghost_note/includes/chat_send_script.html" %}
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if ghost_chat_mode %}
+        <div class="ghost-bot-chat">
+            <h2>Чат {{ ghost_chat_title }}</h2>
+            <div id="ghost-chat-messages">{{ ghost_chat_html }}</div>
+            <form
+                id="ghost-chat-send-form"
+                class="ghost-chat-compose"
+                data-send-url="{{ ghost_chat_send_url }}"
+                data-telegram-user-id="{{ ghost_chat_telegram_user_id }}"
+                data-username="{{ ghost_chat_username }}"
+            >
+                {% csrf_token %}
+                <textarea
+                    name="text"
+                    rows="3"
+                    maxlength="4096"
+                    placeholder="Напишите пользователю от имени бота…"
+                    required
+                ></textarea>
+                <button type="submit" class="btn btn-primary">Отправить</button>
+            </form>
+            <div id="ghost-chat-send-status" class="ghost-chat-compose-status"></div>
+        </div>
+    {% endif %}
+    {{ block.super }}
+{% endblock %}
+
+{% block result_list %}
+    {% if not ghost_chat_mode %}
+        {{ block.super }}
+    {% endif %}
+{% endblock %}

@@ -1,8 +1,10 @@
 from django.urls import path
 
-from . import views
+from . import purchase_views, telegram_webhook, views
 
 urlpatterns = [
+    path('yookassa/webhook/', purchase_views.yookassa_webhook, name='ghost_yookassa_webhook'),
+    path('telegram/webhook/', telegram_webhook.ghost_telegram_webhook, name='ghost_telegram_webhook'),
     path('auth/', views.validate_token, name='ghost_validate_token'),
     path('viewer/', views.viewer_by_token, name='ghost_viewer_token'),
     path('viewer/<uuid:session_id>/', views.viewer, name='ghost_viewer'),

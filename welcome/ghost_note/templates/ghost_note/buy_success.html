@@ -1,0 +1,257 @@
+{% extends "main/base.html" %}
+
+{% block title %}Оплата прошла{% endblock %}
+
+{% block extra_head %}
+<style>
+    .token-box {
+        margin: 1.5em 0;
+        padding: 24px;
+        background: #0f172a;
+        color: #f8fafc;
+        border-radius: 12px;
+        text-align: center;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 2rem;
+        letter-spacing: 0.15em;
+        font-weight: 700;
+    }
+    .waiting { color: var(--muted); }
+    .order-meta { font-size: 0.95rem; color: var(--muted); }
+    .purchase-tips {
+        margin: 1.5em 0;
+        padding: 18px 20px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+    }
+    .purchase-tips h2 { margin: 0 0 0.75em; font-size: 1.1rem; }
+    .purchase-tips ul { margin: 0; padding-left: 1.25em; }
+    .purchase-tips li { margin-bottom: 0.65em; line-height: 1.55; font-size: 0.96rem; }
+    .purchase-tips li:last-child { margin-bottom: 0; }
+    .info-link {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--accent);
+        font-size: 0.95rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .info-link:hover { opacity: 0.85; }
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(15, 23, 42, 0.55);
+        padding: 20px;
+        overflow-y: auto;
+    }
+    .modal-overlay.is-open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        max-width: 640px;
+        width: 100%;
+        margin: 40px auto;
+        padding: 24px 28px 28px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+    }
+    .modal h2 { margin: 0 0 12px; font-size: 1.35rem; line-height: 1.3; }
+    .modal p, .modal li { font-size: 0.96rem; line-height: 1.55; }
+    .modal ul, .modal ol { padding-left: 1.25em; margin: 0.6em 0; }
+    .modal li { margin-bottom: 0.45em; }
+    .modal-close {
+        float: right;
+        border: none;
+        background: #f1f5f9;
+        color: var(--text);
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .modal-close:hover { background: #e2e8f0; }
+    .modal-note {
+        margin-top: 1em;
+        padding: 12px 14px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.92rem;
+        color: var(--muted);
+    }
+    .usage-instructions { margin: 0.6em 0 0; }
+    .download-block {
+        margin: 1.2em 0;
+        padding: 18px 20px;
+        background: #eff6ff;
+        border: 1px solid #bfdbfe;
+        border-radius: 10px;
+    }
+    .download-block h2 { margin: 0 0 0.75em; font-size: 1.1rem; }
+    .download-btn {
+        display: inline-block;
+        padding: 12px 20px;
+        background: var(--accent);
+        color: #fff !important;
+        text-decoration: none;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    .download-btn:hover { opacity: 0.92; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Спасибо за оплату</h1>
+
+    {% if token %}
+        <p>Ваш токен доступа:</p>
+        <div class="token-box" id="token-value">{{ token }}</div>
+        <p class="order-meta">
+            {{ order.get_access_type_display }} ·
+            {{ order.duration_minutes }} мин ·
+            с {{ order.starts_at|date:"d.m.Y H:i" }} МСК
+        </p>
+        <p>Сохраните токен — он понадобится для входа в Ghost Note. Обычно он выдаётся <strong>сразу после оплаты</strong>.</p>
+        {% include "ghost_note/_download_block.html" %}
+        <p>
+            <button type="button" class="info-link" data-modal="modal-usage">Инструкция по использованию</button>
+        </p>
+        {% if order.customer_telegram %}
+            <p class="order-meta">
+                Токен также отправлен в Telegram: {{ order.customer_telegram }}
+                {% if order.telegram_notified_at %}✓{% elif order.telegram_notify_error %}
+                    (ошибка доставки — напишите в поддержку)
+                {% else %}
+                    (отправляется…)
+                {% endif %}
+            </p>
+        {% endif %}
+        {% if order.customer_email %}
+            <p class="order-meta">
+                Токен также отправлен на e-mail: {{ order.customer_email }}
+                {% if order.email_notified_at %}✓{% elif order.email_notify_error %}
+                    (ошибка доставки — напишите в поддержку)
+                {% else %}
+                    (отправляется…)
+                {% endif %}
+            </p>
+        {% endif %}
+        {% include "ghost_note/_purchase_tips.html" %}
+    {% else %}
+        <p class="waiting" id="status-text">Ожидаем подтверждение оплаты… Токен обычно выдаётся сразу после оплаты.</p>
+        <div class="token-box" id="token-value" style="display:none"></div>
+        <p class="order-meta" id="order-meta" style="display:none"></p>
+        {% include "ghost_note/_download_block.html" %}
+        <p id="usage-link-wrap" style="display:none">
+            <button type="button" class="info-link" data-modal="modal-usage">Инструкция по использованию</button>
+        </p>
+        <p class="order-meta">
+            По вопросам, переносу времени или возврату — Telegram
+            <a href="{{ site.support_telegram_url }}" target="_blank" rel="noopener">{{ site.support_telegram }}</a>
+        </p>
+    {% endif %}
+
+    <p><a href="/">На главную</a></p>
+</div>
+
+<div class="modal-overlay" id="modal-usage" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-usage-title">
+        <button type="button" class="modal-close" data-close aria-label="Закрыть">&times;</button>
+        <h2 id="modal-usage-title">Инструкция по использованию</h2>
+        <p>
+            Сначала <a href="{{ site.download_url }}" target="_blank" rel="noopener">скачайте {{ site.download_filename }}</a>
+            с Яндекс.Диска и установите программу.
+        </p>
+        {% include "ghost_note/_usage_instructions.html" %}
+    </div>
+</div>
+
+{% block footer_support %}
+<p><strong>Поддержка:</strong> вопросы, перенос времени, возврат — Telegram
+<a href="{{ site.support_telegram_url }}" target="_blank" rel="noopener">{{ site.support_telegram }}</a></p>
+{% endblock %}
+
+<script>
+(function () {
+    function openModal(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('is-open');
+        el.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal(el) {
+        el.classList.remove('is-open');
+        el.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.modal-overlay.is-open')) {
+            document.body.style.overflow = '';
+        }
+    }
+    document.querySelectorAll('[data-modal]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openModal(btn.getAttribute('data-modal'));
+        });
+    });
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) closeModal(overlay);
+        });
+        overlay.querySelectorAll('[data-close]').forEach(function (btn) {
+            btn.addEventListener('click', function () { closeModal(overlay); });
+        });
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay.is-open').forEach(closeModal);
+        }
+    });
+    window.ghostNoteOpenUsageModal = function () { openModal('modal-usage'); };
+
+    {% if token %}
+    openModal('modal-usage');
+    {% else %}
+    const statusUrl = "{{ status_url }}";
+    const tokenEl = document.getElementById('token-value');
+    const statusText = document.getElementById('status-text');
+    const metaEl = document.getElementById('order-meta');
+    const usageLinkWrap = document.getElementById('usage-link-wrap');
+
+    function poll() {
+        fetch(statusUrl, {headers: {'Accept': 'application/json'}})
+            .then(r => r.json())
+            .then(data => {
+                if (data.paid && data.token) {
+                    tokenEl.textContent = data.token;
+                    tokenEl.style.display = 'block';
+                    statusText.textContent = 'Ваш токен доступа:';
+                    if (data.starts_at) {
+                        metaEl.style.display = 'block';
+                        metaEl.textContent = 'Доступ активен по расписанию заказа.';
+                    }
+                    if (usageLinkWrap) usageLinkWrap.style.display = 'block';
+                    openModal('modal-usage');
+                    return;
+                }
+                if (data.status === 'canceled') {
+                    statusText.textContent = 'Оплата отменена. Попробуйте снова.';
+                    return;
+                }
+                setTimeout(poll, 2000);
+            })
+            .catch(() => setTimeout(poll, 3000));
+    }
+    poll();
+    {% endif %}
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,289 @@
+{% extends "main/base.html" %}
+
+{% block title %}Купить доступ{% endblock %}
+
+{% block extra_head %}
+<style>
+    .buy-form label { display: block; font-weight: 600; margin: 1.1em 0 0.4em; }
+    .buy-form input[type="text"],
+    .buy-form input[type="email"],
+    .buy-form input[type="datetime-local"],
+    .buy-form select {
+        width: 100%;
+        max-width: 420px;
+        padding: 10px 12px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+    .buy-form ul { list-style: none; padding: 0; margin: 0; }
+    .buy-form ul li { margin-bottom: 0.5em; }
+    .buy-form ul label { font-weight: 500; display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+    .buy-form .errorlist { color: #b91c1c; margin: 0.3em 0 0; padding-left: 1.1em; }
+    .buy-form .nonfield-errors { color: #b91c1c; margin-bottom: 1em; }
+    .buy-submit {
+        margin-top: 1.5em;
+        padding: 12px 24px;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .buy-submit:hover { opacity: 0.92; }
+    .price-hint { color: var(--muted); font-size: 0.95rem; margin-top: 0.5em; }
+    .access-info-links { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 8px; }
+    .info-link {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--accent);
+        font-size: 0.95rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .info-link:hover { opacity: 0.85; }
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(15, 23, 42, 0.55);
+        padding: 20px;
+        overflow-y: auto;
+    }
+    .modal-overlay.is-open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        max-width: 640px;
+        width: 100%;
+        margin: 40px auto;
+        padding: 24px 28px 28px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+    }
+    .modal h2 { margin: 0 0 12px; font-size: 1.35rem; line-height: 1.3; }
+    .modal p, .modal li { font-size: 0.96rem; line-height: 1.55; }
+    .modal ul, .modal ol { padding-left: 1.25em; margin: 0.6em 0; }
+    .modal li { margin-bottom: 0.45em; }
+    .modal-close {
+        float: right;
+        border: none;
+        background: #f1f5f9;
+        color: var(--text);
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .modal-close:hover { background: #e2e8f0; }
+    .modal-note {
+        margin-top: 1em;
+        padding: 12px 14px;
+        background: #f8fafc;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 0.92rem;
+        color: var(--muted);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h1>Купить доступ Ghost Note</h1>
+    <p class="lead">Заполните форму и перейдите к оплате. Токен обычно выдаётся <strong>сразу после оплаты</strong> — на экране, в Telegram и на e-mail.</p>
+    <p><button type="button" class="info-link" data-modal="modal-usage">Инструкция по использованию</button></p>
+
+    <form method="post" class="buy-form">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <div class="nonfield-errors">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <label for="{{ form.customer_name.id_for_label }}">{{ form.customer_name.label }}</label>
+        {{ form.customer_name }}
+        {{ form.customer_name.errors }}
+
+        <label for="{{ form.customer_telegram.id_for_label }}">{{ form.customer_telegram.label }}</label>
+        {{ form.customer_telegram }}
+        {% if ghost_bot_url %}
+            <p class="price-hint">
+                Сначала откройте бота и нажмите <strong>Start</strong>:
+                <a href="{{ ghost_bot_url }}" target="_blank" rel="noopener">{{ ghost_bot_username }}</a>.
+                Затем укажите свой Telegram ID (бот пришлёт его) или @username.
+            </p>
+        {% else %}
+            <p class="price-hint">
+                Укажите числовой Telegram ID или @username. Перед покупкой напишите боту Ghost Note команду /start.
+            </p>
+        {% endif %}
+        {{ form.customer_telegram.errors }}
+
+        <label for="{{ form.customer_email.id_for_label }}">{{ form.customer_email.label }}</label>
+        {{ form.customer_email }}
+        {% if form.customer_email.help_text %}
+            <p class="price-hint">{{ form.customer_email.help_text }}</p>
+        {% endif %}
+        {{ form.customer_email.errors }}
+
+        <label for="{{ form.referral_key.id_for_label }}">{{ form.referral_key.label }}</label>
+        {{ form.referral_key }}
+        <p class="price-hint">Если вас пригласил друг — укажите его 8-символьный ключ.</p>
+        {{ form.referral_key.errors }}
+
+        <label>{{ form.access_type.label }}</label>
+        {{ form.access_type }}
+        <p class="price-hint">Локальный — 2 500 ₽ · Удалённый — 3 000 ₽</p>
+        <div class="access-info-links">
+            <button type="button" class="info-link" data-modal="modal-local">Что такое локальный доступ?</button>
+            <button type="button" class="info-link" data-modal="modal-remote">Что такое удалённый доступ?</button>
+        </div>
+        {{ form.access_type.errors }}
+
+        <label for="{{ form.duration_minutes.id_for_label }}">{{ form.duration_minutes.label }}</label>
+        {{ form.duration_minutes }}
+        <p class="price-hint">Не более 3 часов.</p>
+        {{ form.duration_minutes.errors }}
+
+        <label for="{{ form.starts_at.id_for_label }}">{{ form.starts_at.label }}</label>
+        {{ form.starts_at }}
+        {{ form.starts_at.errors }}
+
+        <div class="modal-note" style="margin-top: 1.4em;">
+            По любым вопросам, переносу времени или возврату средств пишите в Telegram:
+            <a href="{{ site.support_telegram_url }}" target="_blank" rel="noopener">{{ site.support_telegram }}</a>
+        </div>
+
+        <button type="submit" class="buy-submit">Перейти к оплате</button>
+    </form>
+</div>
+
+{% block footer_support %}
+<p><strong>Поддержка:</strong> вопросы, перенос времени, возврат — Telegram
+<a href="{{ site.support_telegram_url }}" target="_blank" rel="noopener">{{ site.support_telegram }}</a></p>
+{% endblock %}
+
+<div class="modal-overlay" id="modal-local" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-local-title">
+        <button type="button" class="modal-close" data-close aria-label="Закрыть">&times;</button>
+        <h2 id="modal-local-title">Локальный доступ</h2>
+        <p>
+            При локальном доступе вы и ваш помощник должны быть подключены к <strong>одной сети интернета</strong>.
+            В идеале — к одному мобильному интернету (раздача с телефона) или к одному домашнему Wi‑Fi.
+        </p>
+        <ul>
+            <li>Сначала подключитесь к общей сети, <strong>и только потом</strong> запускайте программу.</li>
+            <li>Не рекомендуется использовать общие сети — общежития, кафе, университетский Wi‑Fi и т.п.</li>
+            <li>Помощник может находиться рядом или в той же квартире — главное, чтобы сеть была общей.</li>
+        </ul>
+        <p>
+            У помощника будет интерфейс с вашим экраном (обновление каждые ~2 секунды), полем для текста
+            и кнопкой «Отправить». При локальном доступе можно включить трансляцию звука с вашего ноутбука
+            (например, для аудирования) — включайте только при необходимости, иначе программа может работать медленнее.
+        </p>
+        <div class="modal-note">
+            Заранее проверьте работу: включите демонстрацию экрана в Zoom или Телемосте
+            и убедитесь, что окно программы на демонстрации не видно.
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-remote" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-remote-title">
+        <button type="button" class="modal-close" data-close aria-label="Закрыть">&times;</button>
+        <h2 id="modal-remote-title">Удалённый доступ</h2>
+        <p>
+            При удалённом доступе помощнику <strong>не обязательно быть рядом</strong> — он может находиться
+            в другом городе или в любой точке, где есть интернет.
+        </p>
+        <ul>
+            <li>Связь идёт через сервер Ghost Note — общая Wi‑Fi сеть не нужна.</li>
+            <li>Подходит, если помощник не может физически оказаться рядом с вами.</li>
+            <li>Трансляция звука с ноутбука доступна так же, как при локальном режиме (по необходимости).</li>
+        </ul>
+        <p>
+            После входа по токену в окне программы будет указан сайт, на который должен зайти помощник.
+            Там он увидит ваш экран, сможет писать сообщения и отправлять их вам.
+        </p>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-usage" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-usage-title">
+        <button type="button" class="modal-close" data-close aria-label="Закрыть">&times;</button>
+        <h2 id="modal-usage-title">Инструкция по использованию</h2>
+        <ol>
+            <li>Программа работает только на <strong>Windows 10 и новее</strong>.</li>
+            <li>
+                Выберите режим:
+                <ul>
+                    <li><strong>Локальный</strong> — вам и помощнику нужно подключиться к одному интернету (лучше мобильная раздача или домашний Wi‑Fi). Не советуем общие сети вроде общежитий. Сначала подключитесь к одной сети, затем запускайте программу.</li>
+                    <li><strong>Удалённый</strong> — помощнику не обязательно быть рядом, он может быть в другом городе.</li>
+                </ul>
+            </li>
+            <li>Введите токен для входа, который вам прислали после оплаты.</li>
+            <li>Выберите желаемый вариант использования — локальный или удалённый.</li>
+            <li>
+                В открывшемся окне будет вся необходимая информация, в том числе сайт, на который должен зайти помощник.
+                У помощника будет интерфейс с вашим экраном (обновляется каждые ~2 секунды), полем для текста
+                и кнопкой «Отправить» — сообщения появятся у вас.
+                При локальном использовании можно включить звук с вашего ноутбука; не включайте без нужды — программа может замедляться.
+            </li>
+        </ol>
+        <p>
+            Программа не отображается в диспетчере задач и на панели задач, маскируется под системный процесс.
+            Скрыть окно с экрана можно комбинацией <strong>Ctrl+Shift+G</strong> (например, если попросят показать экран второй камерой).
+        </p>
+        <div class="modal-note">
+            У всех разные версии Windows; на старых системах программа может не работать.
+            Советуем заранее проверить: включите демонстрацию экрана в Zoom или Телемосте
+            и убедитесь, что окна программы на записи не видно.
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function openModal(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('is-open');
+        el.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal(el) {
+        el.classList.remove('is-open');
+        el.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.modal-overlay.is-open')) {
+            document.body.style.overflow = '';
+        }
+    }
+    document.querySelectorAll('[data-modal]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openModal(btn.getAttribute('data-modal'));
+        });
+    });
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) closeModal(overlay);
+        });
+        overlay.querySelectorAll('[data-close]').forEach(function (btn) {
+            btn.addEventListener('click', function () { closeModal(overlay); });
+        });
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay.is-open').forEach(closeModal);
+        }
+    });
+})();
+</script>
+{% endblock %}

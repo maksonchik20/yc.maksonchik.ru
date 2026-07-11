@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrajs %}
+    {{ block.super }}
+    {% include "admin/ghost_note/includes/commission_paid_toggle_script.html" %}
+{% endblock %}
+
+{% block extrahead %}
+    {{ block.super }}
+    <style>
+        #changelist .submit-row,
+        #changelist-form .submit-row {
+            display: none !important;
+        }
+    </style>
+{% endblock %}

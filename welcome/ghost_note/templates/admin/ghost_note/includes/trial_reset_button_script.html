@@ -1,0 +1,71 @@
+<script>
+(function () {
+  'use strict';
+
+  function getCsrfToken() {
+    var input = document.querySelector('input[name="csrfmiddlewaretoken"]');
+    if (input && input.value) {
+      return input.value;
+    }
+    var match = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  }
+
+  function updateRow(row, data) {
+    var lastTrialCell = row.querySelector('td.field-last_trial_at');
+    var statusCell = row.querySelector('td.field-trial_cooldown_status');
+    if (lastTrialCell && data.last_trial_at !== undefined) {
+      lastTrialCell.textContent = data.last_trial_at;
+    }
+    if (statusCell && data.trial_status !== undefined) {
+      statusCell.textContent = data.trial_status;
+    }
+  }
+
+  document.addEventListener('click', function (event) {
+    var button = event.target.closest('.ghost-trial-reset-btn');
+    if (!button || button.disabled) {
+      return;
+    }
+
+    event.preventDefault();
+
+    var url = button.dataset.url;
+    if (!url) {
+      return;
+    }
+
+    var row = button.closest('tr');
+    button.disabled = true;
+
+    fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-CSRFToken': getCsrfToken(),
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+      body: '',
+    })
+      .then(function (response) {
+        return response.json().then(function (data) {
+          if (!response.ok || !data.ok) {
+            throw new Error((data && data.error) || 'save_failed');
+          }
+          return data;
+        });
+      })
+      .then(function (data) {
+        if (row) {
+          updateRow(row, data);
+        }
+        button.disabled = true;
+      })
+      .catch(function () {
+        button.disabled = false;
+        window.alert('Не удалось сбросить пробный доступ. Попробуйте ещё раз.');
+      });
+  });
+})();
+</script>

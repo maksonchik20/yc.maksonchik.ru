@@ -19,8 +19,19 @@ def send_bot_tg(chat_id, text):
     )
 
 
+from django.shortcuts import render
+
+
 def index(request):
-    return HttpResponse('Hello, World!')
+    return render(request, 'main/index.html')
+
+
+def oferta(request):
+    return render(request, 'main/oferta.html')
+
+
+def privacy(request):
+    return render(request, 'main/privacy.html')
 
 
 @csrf_exempt

@@ -1,0 +1,6 @@
+{% extends "admin/change_list.html" %}
+
+{% block extrajs %}
+    {{ block.super }}
+    {% include "admin/ghost_note/includes/trial_reset_button_script.html" %}
+{% endblock %}
