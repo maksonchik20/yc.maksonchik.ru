@@ -1,0 +1,157 @@
+<h2 id="access-types">Типы доступа</h2>
+<p>
+    Ghost Note работает в двух режимах. Нажмите, чтобы узнать подробности о каждом:
+</p>
+<div class="access-info-links">
+    <button type="button" class="info-link" data-modal="modal-local">Что такое локальный доступ?</button>
+    <button type="button" class="info-link" data-modal="modal-remote">Что такое удалённый доступ?</button>
+</div>
+
+<style>
+    .access-info-links {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px 22px;
+        margin: 10px 0 4px;
+    }
+    .info-link {
+        background: none;
+        border: none;
+        padding: 0;
+        color: var(--accent, #2563eb);
+        font-size: 0.98rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+    }
+    .info-link:hover { opacity: 0.85; }
+    .modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 1000;
+        background: rgba(15, 23, 42, 0.55);
+        padding: 20px;
+        overflow-y: auto;
+    }
+    .modal-overlay.is-open { display: flex; align-items: flex-start; justify-content: center; }
+    .modal {
+        background: var(--card, #ffffff);
+        border: 1px solid var(--border, #dde3ea);
+        border-radius: 14px;
+        max-width: 640px;
+        width: 100%;
+        margin: 40px auto;
+        padding: 24px 28px 28px;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+    }
+    .modal h2 { margin: 0 0 12px; font-size: 1.35rem; line-height: 1.3; }
+    .modal p, .modal li { font-size: 0.96rem; line-height: 1.55; }
+    .modal ul, .modal ol { padding-left: 1.25em; margin: 0.6em 0; }
+    .modal li { margin-bottom: 0.45em; }
+    .modal-close {
+        float: right;
+        border: none;
+        background: #f1f5f9;
+        color: var(--text, #0f172a);
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        font-size: 1.25rem;
+        line-height: 1;
+        cursor: pointer;
+    }
+    .modal-close:hover { background: #e2e8f0; }
+    .modal-note {
+        margin-top: 1em;
+        padding: 12px 14px;
+        background: #f8fafc;
+        border: 1px solid var(--border, #dde3ea);
+        border-radius: 8px;
+        font-size: 0.92rem;
+        color: var(--muted, #5c6670);
+    }
+</style>
+
+<div class="modal-overlay" id="modal-local" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-local-title">
+        <button type="button" class="modal-close" data-close aria-label="Закрыть">&times;</button>
+        <h2 id="modal-local-title">Локальный доступ</h2>
+        <p>
+            При локальном доступе вы и ваш помощник должны быть подключены к <strong>одной сети интернета</strong>.
+            В идеале — к одному мобильному интернету (раздача с телефона) или к одному домашнему Wi‑Fi.
+        </p>
+        <ul>
+            <li>Сначала подключитесь к общей сети, <strong>и только потом</strong> запускайте программу.</li>
+            <li>Не рекомендуется использовать общие сети — общежития, кафе, университетский Wi‑Fi и т.п.</li>
+            <li>Помощник может находиться рядом или в той же квартире — главное, чтобы сеть была общей.</li>
+        </ul>
+        <p>
+            У помощника будет интерфейс с вашим экраном (обновление каждые ~2 секунды), полем для текста
+            и кнопкой «Отправить». При локальном доступе можно включить трансляцию звука с вашего ноутбука
+            (например, для аудирования) — включайте только при необходимости, иначе программа может работать медленнее.
+        </p>
+        <div class="modal-note">
+            Заранее проверьте работу: включите демонстрацию экрана в Zoom или Телемосте
+            и убедитесь, что окно программы на демонстрации не видно.
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modal-remote" aria-hidden="true">
+    <div class="modal" role="dialog" aria-labelledby="modal-remote-title">
+        <button type="button" class="modal-close" data-close aria-label="Закрыть">&times;</button>
+        <h2 id="modal-remote-title">Удалённый доступ</h2>
+        <p>
+            При удалённом доступе помощнику <strong>не обязательно быть рядом</strong> — он может находиться
+            в другом городе или в любой точке, где есть интернет.
+        </p>
+        <ul>
+            <li>Связь идёт через сервер Ghost Note — общая Wi‑Fi сеть не нужна.</li>
+            <li>Подходит, если помощник не может физически оказаться рядом с вами.</li>
+            <li>Трансляция звука с ноутбука доступна так же, как при локальном режиме (по необходимости).</li>
+        </ul>
+        <p>
+            После входа по токену в окне программы будет указан сайт, на который должен зайти помощник.
+            Там он увидит ваш экран, сможет писать сообщения и отправлять их вам.
+        </p>
+    </div>
+</div>
+
+<script>
+(function () {
+    function openModal(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.classList.add('is-open');
+        el.setAttribute('aria-hidden', 'false');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeModal(el) {
+        el.classList.remove('is-open');
+        el.setAttribute('aria-hidden', 'true');
+        if (!document.querySelector('.modal-overlay.is-open')) {
+            document.body.style.overflow = '';
+        }
+    }
+    document.querySelectorAll('[data-modal]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            openModal(btn.getAttribute('data-modal'));
+        });
+    });
+    document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
+        overlay.addEventListener('click', function (e) {
+            if (e.target === overlay) closeModal(overlay);
+        });
+        overlay.querySelectorAll('[data-close]').forEach(function (btn) {
+            btn.addEventListener('click', function () { closeModal(overlay); });
+        });
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal-overlay.is-open').forEach(closeModal);
+        }
+    });
+})();
+</script>
