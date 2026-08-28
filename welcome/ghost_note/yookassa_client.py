@@ -16,8 +16,8 @@ YOOKASSA_WEBHOOK_IPS = [
     ipaddress.ip_network('2a02:5180::/32'),
 ]
 YOOKASSA_WEBHOOK_IPS.extend([
-    ipaddress.ip_address('77.75.156.11'),
-    ipaddress.ip_address('77.75.156.35'),
+    ipaddress.ip_network('77.75.156.11/32'),
+    ipaddress.ip_network('77.75.156.35/32'),
 ])
 
 PRICE_LOCAL = Decimal('2500.00')
