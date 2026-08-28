@@ -17,6 +17,7 @@ from .telegram_notify import (
     notify_admin_purchase_failed,
 )
 from .yookassa_client import YooKassaError, create_payment, is_yookassa_webhook_ip
+from .who_update_payment_bridge import forward_who_update_payment
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +183,10 @@ def yookassa_webhook(request):
         payload = json.loads(request.body.decode('utf-8'))
     except (UnicodeDecodeError, json.JSONDecodeError):
         return HttpResponse(status=400)
+
+    forwarded_status = forward_who_update_payment(payload)
+    if forwarded_status is not None:
+        return HttpResponse(status=forwarded_status)
 
     event = payload.get('event', '')
     payment_obj = payload.get('object') or {}
