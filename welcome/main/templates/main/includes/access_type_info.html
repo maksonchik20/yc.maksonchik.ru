@@ -1,4 +1,9 @@
 <h2 id="access-types">Типы доступа</h2>
+<p class="note-box">
+    Ghost Note <strong>не отображается при трансляции экрана и прокторинге</strong> (Zoom, Телемост, Examus)
+    и позволяет помощнику <strong>обмениваться с вами текстовыми сообщениями</strong>
+    через защищённое соединение. Подробнее — <a href="/proktoring/">страница про прокторинг</a>.
+</p>
 <p>
     Ghost Note работает в двух режимах. Нажмите, чтобы узнать подробности о каждом:
 </p>
@@ -11,40 +16,52 @@
     .access-info-links {
         display: flex;
         flex-wrap: wrap;
-        gap: 10px 22px;
+        gap: 10px;
         margin: 10px 0 4px;
     }
     .info-link {
-        background: none;
-        border: none;
-        padding: 0;
-        color: var(--accent, #2563eb);
-        font-size: 0.98rem;
-        font-weight: 500;
-        cursor: pointer;
-        text-decoration: underline;
-        text-underline-offset: 2px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        padding: 8px 14px;
+        border: 1px solid rgba(0, 245, 255, 0.25);
+        border-radius: 999px;
+        background: rgba(0, 245, 255, 0.05);
+        color: var(--cyan);
+        font: 700 0.9rem/1.25 var(--font-body);
+        text-decoration: none;
+        transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
     }
-    .info-link:hover { opacity: 0.85; }
+    .info-link:hover {
+        transform: translateY(-1px);
+        border-color: var(--cyan);
+        background: rgba(0, 245, 255, 0.1);
+        box-shadow: 0 0 24px rgba(0, 245, 255, 0.12);
+    }
+    .info-link:active { transform: translateY(0); }
     .modal-overlay {
         display: none;
         position: fixed;
         inset: 0;
         z-index: 1000;
-        background: rgba(15, 23, 42, 0.55);
+        background: rgba(2, 2, 6, 0.82);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         padding: 20px;
         overflow-y: auto;
     }
     .modal-overlay.is-open { display: flex; align-items: flex-start; justify-content: center; }
     .modal {
-        background: var(--card, #ffffff);
-        border: 1px solid var(--border, #dde3ea);
-        border-radius: 14px;
+        color: var(--ink);
+        background: linear-gradient(145deg, rgba(17, 20, 40, 0.98), rgba(7, 8, 20, 0.98));
+        border: 1px solid rgba(0, 245, 255, 0.2);
+        border-radius: var(--radius);
         max-width: 640px;
         width: 100%;
         margin: 40px auto;
         padding: 24px 28px 28px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+        box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55), 0 0 60px rgba(0, 245, 255, 0.08);
     }
     .modal h2 { margin: 0 0 12px; font-size: 1.35rem; line-height: 1.3; }
     .modal p, .modal li { font-size: 0.96rem; line-height: 1.55; }
@@ -52,22 +69,31 @@
     .modal li { margin-bottom: 0.45em; }
     .modal-close {
         float: right;
-        border: none;
-        background: #f1f5f9;
-        color: var(--text, #0f172a);
-        width: 36px;
-        height: 36px;
-        border-radius: 8px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.06);
+        color: var(--ink);
         font-size: 1.25rem;
         line-height: 1;
-        cursor: pointer;
+        transition: transform 0.2s ease, color 0.2s ease, background 0.2s ease, border-color 0.2s ease;
     }
-    .modal-close:hover { background: #e2e8f0; }
+    .modal-close:hover {
+        transform: rotate(90deg);
+        color: var(--cyan);
+        background: rgba(0, 245, 255, 0.1);
+        border-color: rgba(0, 245, 255, 0.5);
+    }
     .modal-note {
         margin-top: 1em;
         padding: 12px 14px;
-        background: #f8fafc;
-        border: 1px solid var(--border, #dde3ea);
+        background: rgba(255, 138, 61, 0.08);
+        border: 1px solid rgba(255, 138, 61, 0.22);
         border-radius: 8px;
         font-size: 0.92rem;
         color: var(--muted, #5c6670);
@@ -124,6 +150,7 @@
     function openModal(id) {
         var el = document.getElementById(id);
         if (!el) return;
+        if (el.parentElement !== document.body) document.body.appendChild(el);
         el.classList.add('is-open');
         el.setAttribute('aria-hidden', 'false');
         document.body.style.overflow = 'hidden';

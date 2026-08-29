@@ -1,8 +1,14 @@
 {% extends "main/base.html" %}
 
-{% block title %}Публичная оферта{% endblock %}
+{% block page_title %}Публичная оферта Ghost Note — yc.maksonchik.ru{% endblock %}
+{% block meta_description %}Публичная оферта на оказание IT-услуг: доступ к программе Ghost Note для удалённого мониторинга компьютера. Условия оплаты, возврата и оказания услуг.{% endblock %}
+{% block canonical_url %}https://yc.maksonchik.ru/oferta/{% endblock %}
+{% block og_title %}Публичная оферта Ghost Note{% endblock %}
+{% block og_description %}Условия оказания услуг доступа к программе Ghost Note для удалённого мониторинга ПК.{% endblock %}
+{% block og_url %}https://yc.maksonchik.ru/oferta/{% endblock %}
 
 {% block content %}
+<div class="wrap content-page">
 <div class="card oferta-body">
     <h1>Публичная оферта о заключении договора об оказании услуг</h1>
 
@@ -89,5 +95,6 @@
     <p><strong>Контактный телефон:</strong> <a href="tel:{{ site.phone_tel }}">{{ site.phone_display }}</a></p>
     <p><strong>Контактный e-mail:</strong> <a href="mailto:{{ site.email }}">{{ site.email }}</a></p>
     <p><strong>Сайт:</strong> <a href="{{ site.url }}">{{ site.url }}</a></p>
+</div>
 </div>
 {% endblock %}

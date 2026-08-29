@@ -1,0 +1,14 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /ghost/
+Disallow: /webhook_tg/
+Disallow: /buy/success/
+Disallow: /buy/status/
+Disallow: /yandex_1cf6644d705ed152.html
+Disallow: /ai/
+Disallow: /send/
+Disallow: /get/
+Disallow: /send_tg/
+
+Sitemap: https://yc.maksonchik.ru/sitemap.xml

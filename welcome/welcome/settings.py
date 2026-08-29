@@ -4,9 +4,9 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = '6dcvhyz21q@rs%6+h8##v#zpryygs@-+u13hp3%3%9n--&!$f0'
 
-DEBUG = True
+DEBUG = False
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['yc.maksonchik.ru', 'localhost', '127.0.0.1']
 
 INSTALLED_APPS = [
     'jazzmin',
@@ -39,7 +39,7 @@ ROOT_URLCONF = 'welcome.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'main' / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [

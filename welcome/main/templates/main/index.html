@@ -1,10 +1,50 @@
 {% extends "main/base.html" %}
 
-{% block title %}Ghost Note — доступ к программе{% endblock %}
+{% block page_title %}Ghost Note — не видна при прокторинге, удалённый мониторинг и сообщения{% endblock %}
+{% block meta_description %}Ghost Note: программа не видна при прокторинге и трансляции экрана (Zoom, Телемост, Examus). Удалённая помощь, просмотр экрана и текстовые сообщения. Пробный доступ в боте. От 2 500 ₽.{% endblock %}
+{% block og_title %}Ghost Note — не видна при прокторинге, удалённый мониторинг ПК{% endblock %}
+{% block og_description %}Не отображается на демонстрации экрана. Удалённый просмотр экрана и обмен текстовыми сообщениями. Пробный доступ в Telegram-боте.{% endblock %}
+
+{% block extra_head %}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Ghost Note",
+  "applicationCategory": "UtilitiesApplication",
+  "operatingSystem": "Windows 10+",
+  "description": "Программа удалённого мониторинга ПК: просмотр экрана, обмен текстовыми сообщениями. Окно не видно при трансляции экрана в Zoom и Телемосте.",
+  "offers": [
+    {
+      "@type": "Offer",
+      "name": "Локальный доступ",
+      "price": "2500",
+      "priceCurrency": "RUB",
+      "url": "https://yc.maksonchik.ru/buy/"
+    },
+    {
+      "@type": "Offer",
+      "name": "Удалённый доступ",
+      "price": "3000",
+      "priceCurrency": "RUB",
+      "url": "https://yc.maksonchik.ru/buy/"
+    }
+  ],
+  "provider": {
+    "@type": "Organization",
+    "name": "Ghost Note",
+    "url": "https://yc.maksonchik.ru/",
+    "email": "{{ site.email }}",
+    "telephone": "{{ site.phone_tel }}"
+  }
+}
+</script>
+{% endblock %}
 
 {% block content %}
+<div class="wrap content-page">
 <div class="card">
-    <h1>Ghost Note — доступ к программе удалённого мониторинга</h1>
+    <h1>Ghost Note — не видна при прокторинге, удалённый мониторинг ПК</h1>
     <p class="lead">
         На сайте <strong>yc.maksonchik.ru</strong> оказывается IT-услуга: предоставление
         ограниченного по времени доступа к программному обеспечению Ghost Note
@@ -20,6 +60,22 @@
         <strong>запрещено</strong>.
     </p>
 
+    <h2>Возможности программы</h2>
+    <ul>
+        <li>
+            <strong>Не видна при трансляции экрана и прокторинге</strong> — окно Ghost Note не попадает
+            в демонстрацию в Zoom, Яндекс Телемосте, Examus и других системах прокторинга.
+        </li>
+        <li>
+            <strong>Обмен текстовыми сообщениями</strong> — помощник пишет текст в удалённом
+            интерфейсе, сообщения появляются у вас в программе; вы можете читать их во время сессии.
+        </li>
+        <li>
+            <strong>Просмотр экрана</strong> — помощник видит ваш рабочий стол с обновлением
+            примерно каждые 2 секунды (локальный или удалённый режим).
+        </li>
+    </ul>
+
     <h2>Что входит в услугу</h2>
     <ul>
         <li>Выдача персонального токена доступа после оплаты.</li>
@@ -29,8 +85,21 @@
         <li>Техническая поддержка по вопросам доступа — по контактам ниже.</li>
     </ul>
 
+    <h2>Пробный доступ</h2>
+    <p>
+        Перед покупкой можно <strong>бесплатно протестировать Ghost Note</strong> в Telegram-боте:
+        откройте бота, нажмите <strong>Start</strong> и отправьте команду <strong>/trial</strong>.
+        Бот выдаст пробный токен на <strong>20 минут</strong> — один раз в 7 дней на аккаунт.
+        Сначала скачайте и запустите программу, убедитесь, что она работает, и только потом запрашивайте токен.
+    </p>
+    <p class="cta-row">
+        <a href="{{ site.ghost_bot_url }}" class="btn btn-secondary btn-arrow" target="_blank" rel="noopener">
+            Получить пробный доступ в боте {{ site.ghost_bot_username }}
+        </a>
+    </p>
+
     <h2>Тарифы</h2>
-    <p><a href="/buy/" style="display:inline-block;margin-bottom:12px;padding:10px 18px;background:var(--accent);color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Купить доступ</a></p>
+    <p class="cta-row"><a href="/buy/" class="btn btn-primary btn-arrow">Купить доступ</a></p>
     <p>Стоимость зависит от типа доступа:</p>
     <table class="price-table">
         <thead>
@@ -56,6 +125,17 @@
     </p>
 
     {% include "main/includes/access_type_info.html" %}
+
+    <h2>Вопросы про прокторинг и демонстрацию экрана</h2>
+    <p>
+        Подробнее о работе Ghost Note при онлайн-тестировании и прокторинге —
+        на отдельной странице: <a href="/proktoring/">Ghost Note при прокторинге</a>.
+    </p>
+    <ul>
+        <li><strong>Видна ли программа на трансляции?</strong> — нет, окно не попадает в демонстрацию экрана.</li>
+        <li><strong>Можно ли получать текст от помощника?</strong> — да, через встроенный обмен сообщениями.</li>
+        <li><strong>Нужен ли пробный период?</strong> — да, команда <strong>/trial</strong> в боте {{ site.ghost_bot_username }}.</li>
+    </ul>
 
     <h2>Как получить услугу после оплаты</h2>
     <ol>
@@ -88,5 +168,6 @@
             <a href="mailto:{{ site.email }}">{{ site.email }}</a>
         </div>
     </div>
+</div>
 </div>
 {% endblock %}

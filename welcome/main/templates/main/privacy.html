@@ -1,8 +1,14 @@
 {% extends "main/base.html" %}
 
-{% block title %}Политика обработки персональных данных{% endblock %}
+{% block page_title %}Политика обработки персональных данных — Ghost Note{% endblock %}
+{% block meta_description %}Политика обработки персональных данных сайта Ghost Note (yc.maksonchik.ru): цели, сроки хранения и права пользователей при оказании услуг удалённого мониторинга.{% endblock %}
+{% block canonical_url %}https://yc.maksonchik.ru/privacy/{% endblock %}
+{% block og_title %}Политика обработки персональных данных — Ghost Note{% endblock %}
+{% block og_description %}Политика обработки персональных данных при оказании услуг доступа к Ghost Note.{% endblock %}
+{% block og_url %}https://yc.maksonchik.ru/privacy/{% endblock %}
 
 {% block content %}
+<div class="wrap content-page">
 <div class="card oferta-body">
     <h1>Политика обработки персональных данных</h1>
     <p>Настоящая Политика определяет порядок обработки и защиты персональных данных пользователей сайта {{ site.url }} (далее — «Сайт»), оказывающего услуги доступа к программе Ghost Note.</p>
@@ -53,5 +59,6 @@
     <p>Актуальная версия размещена на Сайте по адресу {{ site.url }}privacy/. Оператор вправе обновлять Политику; новая редакция вступает в силу с момента публикации.</p>
 
     <p><strong>Дата публикации:</strong> 19 июня 2026 г.</p>
+</div>
 </div>
 {% endblock %}

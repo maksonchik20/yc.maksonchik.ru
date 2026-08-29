@@ -1,0 +1,294 @@
+{% extends "main/base.html" %}
+
+{% block page_title %}Ghost Note при прокторинге — программа не видна на трансляции экрана{% endblock %}
+{% block meta_description %}Ghost Note не отображается при прокторинге и демонстрации экрана в Zoom, Телемосте, Examus. Удалённая помощь: просмотр экрана и обмен текстовыми сообщениями. Пробный доступ в боте, тарифы от 2 500 ₽.{% endblock %}
+{% block canonical_url %}https://yc.maksonchik.ru/proktoring/{% endblock %}
+{% block og_title %}Ghost Note при прокторинге — не видна на трансляции экрана{% endblock %}
+{% block og_description %}Программа не попадает в демонстрацию экрана. Удалённый просмотр рабочего стола и текстовые сообщения от помощника.{% endblock %}
+{% block og_url %}https://yc.maksonchik.ru/proktoring/{% endblock %}
+
+{% block nav_links %}
+<a class="hide-sm" href="#features">Возможности</a>
+<a class="hide-sm" href="#faq">FAQ</a>
+<a class="hide-sm" href="/">Тарифы</a>
+<a class="hide-sm" href="/buy/">Купить</a>
+{% endblock %}
+
+{% block extra_head %}
+<style>
+  .proktoring-page { --accent: var(--cyan); --accent-dim: rgba(0, 245, 255, 0.08); --accent-border: rgba(0, 245, 255, 0.25); }
+  .hero {
+    min-height: 100vh; min-height: 100dvh; display: flex; align-items: center;
+    padding: 120px 0 80px; position: relative; overflow: hidden;
+  }
+  .hero-bg-word {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -55%);
+    font-family: var(--font-display); font-size: clamp(4rem, 16vw, 12rem);
+    font-weight: 800; letter-spacing: -0.06em; line-height: 0.85; white-space: nowrap;
+    color: rgba(255,255,255,0.03); -webkit-text-stroke: 1.5px rgba(0,245,255,0.15);
+    pointer-events: none; user-select: none; z-index: 0;
+  }
+  .hero-inner { position: relative; z-index: 1; width: 100%; }
+  .hero-grid {
+    display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    gap: 56px; align-items: center;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px 8px 10px; border-radius: 999px;
+    border: 1px solid var(--accent-border); background: var(--accent-dim);
+    font-size: 0.78rem; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 20px;
+  }
+  .eyebrow-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 16px var(--accent); }
+  .hero h1 {
+    font-family: var(--font-display); font-size: clamp(1.8rem, 4.5vw, 3rem);
+    font-weight: 800; line-height: 1.1; letter-spacing: -0.04em; margin: 0 0 20px;
+  }
+  .hero-sub { margin: 0 0 28px; color: var(--muted); font-size: 1.05rem; max-width: 54ch; line-height: 1.75; }
+  .hero-cta { display: flex; flex-wrap: wrap; gap: 14px; }
+  .hero-note { margin-top: 16px; font-size: 0.88rem; color: var(--muted); }
+
+  .hero-panel { padding: 28px; }
+  .hero-panel h2 {
+    font-family: var(--font-display); font-size: 0.85rem; font-weight: 700;
+    letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin: 0 0 16px;
+  }
+  .hero-panel ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+  .hero-panel li {
+    position: relative; padding-left: 18px; color: var(--muted); font-size: 0.94rem; line-height: 1.55;
+  }
+  .hero-panel li::before {
+    content: ""; position: absolute; left: 0; top: 0.55em;
+    width: 7px; height: 7px; border-radius: 2px; background: var(--accent); transform: rotate(45deg);
+  }
+  .hero-panel strong { color: var(--ink); }
+
+  .section-block { padding: 100px 0 60px; position: relative; }
+  .section-title {
+    font-family: var(--font-display); font-size: clamp(2rem, 4.5vw, 3.2rem);
+    font-weight: 800; margin: 0; letter-spacing: -0.04em; line-height: 1;
+  }
+  .section-sub { font-size: 1.05rem; color: var(--muted); max-width: 58ch; line-height: 1.75; margin: 20px 0 0; }
+
+  .feature-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 40px; }
+  .feature-card { padding: 24px; }
+  .feature-card h3 { font-family: var(--font-display); font-size: 1.1rem; font-weight: 700; margin: 0 0 10px; }
+  .feature-card p { margin: 0; color: var(--muted); font-size: 0.94rem; line-height: 1.65; }
+
+  .note-card { margin-top: 40px; padding: 28px 32px; max-width: 46rem; }
+  .note-card p { margin: 0; color: var(--muted); line-height: 1.7; }
+
+  .contact-arena {
+    position: relative; border-radius: calc(var(--radius) + 12px); padding: 3px;
+    background: conic-gradient(from var(--angle), var(--cyan), var(--violet), var(--magenta), var(--cyan));
+    animation: border-spin 4s linear infinite;
+  }
+  .contact-arena__inner {
+    background: rgba(2, 2, 6, 0.92); border-radius: calc(var(--radius) + 9px);
+    padding: clamp(40px, 6vw, 64px); text-align: center;
+  }
+  .contact-arena h2 {
+    font-family: var(--font-display); font-size: clamp(1.8rem, 4vw, 2.6rem);
+    font-weight: 800; margin: 0 0 16px; letter-spacing: -0.04em;
+  }
+  .contact-arena p { margin: 0 auto 28px; color: var(--muted); max-width: 52ch; line-height: 1.75; }
+  .contact-actions { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+
+  @media (max-width: 900px) {
+    .hero-grid { grid-template-columns: 1fr; }
+    .feature-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .hero { min-height: auto; padding: 88px 0 40px; }
+    .section-block { padding: 72px 0 40px; }
+  }
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Видна ли Ghost Note при прокторинге и демонстрации экрана?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Окно Ghost Note не попадает в трансляцию экрана в Zoom, Яндекс Телемосте и типичных системах прокторинга. Перед сессией можно проверить: включите демонстрацию экрана и убедитесь, что программа не отображается."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Можно ли обмениваться текстовыми сообщениями во время прокторинга?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Да. Помощник отправляет текст через удалённый интерфейс Ghost Note, сообщения появляются у вас в программе на компьютере."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Как получить удалённую помощь при онлайн-тестировании?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Оформите доступ на сайте или получите пробный токен в Telegram-боте GhostNoteShopBot командой /trial. Помощник подключается через удалённый или локальный режим и видит ваш экран с обновлением примерно каждые 2 секунды."
+      }
+    }
+  ]
+}
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="proktoring-page">
+  <section class="hero wrap">
+    <div class="hero-bg-word" aria-hidden="true">Ghost Note</div>
+    <div class="hero-inner">
+      <div class="hero-grid">
+        <div>
+          <div class="eyebrow" data-reveal><span class="eyebrow-dot"></span>Прокторинг · Zoom · Телемост · Examus</div>
+          <h1 data-reveal data-reveal-delay="1">Ghost Note при прокторинге — не видна на трансляции экрана</h1>
+          <p class="hero-sub" data-reveal data-reveal-delay="2">
+            Ghost Note — программа для <strong>удалённой помощи на своём компьютере</strong>:
+            помощник видит экран, а вы получаете <strong>текстовые сообщения</strong> в программе.
+            Окно Ghost Note <strong>не отображается при прокторинге и демонстрации экрана</strong>
+            в Zoom, Яндекс Телемосте, Examus и других сервисах.
+          </p>
+          <div class="hero-cta" data-reveal data-reveal-delay="3">
+            <a class="btn btn-primary btn-arrow" href="/buy/">Купить доступ</a>
+            <a class="btn btn-ghost btn-arrow" href="{{ site.ghost_bot_url }}" target="_blank" rel="noopener">Пробный доступ в {{ site.ghost_bot_username }}</a>
+          </div>
+          <p class="hero-note" data-reveal data-reveal-delay="4">Локальный доступ — 2 500 ₽ · Удалённый — 3 000 ₽</p>
+        </div>
+
+        <aside class="hero-panel holo-card tilt-card" data-reveal data-reveal-delay="2">
+          <h2>Что важно при прокторинге</h2>
+          <ul>
+            <li><strong>Не видна на трансляции</strong> — окно не попадает в картинку для проктора.</li>
+            <li><strong>Текстовые сообщения</strong> — без отдельного мессенджера на экране.</li>
+            <li><strong>Удалённый просмотр</strong> — обновление ~каждые 2 секунды.</li>
+            <li><strong>Скрытое окно</strong> — не в панели задач; <kbd>Ctrl+Shift+G</kbd>.</li>
+          </ul>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="section-block wrap" id="features">
+    <span class="section-num" aria-hidden="true">01</span>
+    <div data-reveal>
+      <div class="eyebrow"><span class="eyebrow-dot"></span>Возможности</div>
+      <h2 class="section-title gradient-text">Как это работает</h2>
+      <p class="section-sub">Помощник подключается через Ghost Note — вы видите текст в программе, проктор видит только ваш рабочий стол без окна Ghost Note.</p>
+    </div>
+    <div class="feature-grid">
+      <article class="feature-card holo-card" data-reveal data-reveal-delay="1">
+        <h3>Не видна на трансляции</h3>
+        <p>При включённой демонстрации экрана окно программы не попадает в картинку, которую видит проктор или собеседник.</p>
+      </article>
+      <article class="feature-card holo-card" data-reveal data-reveal-delay="2">
+        <h3>Текстовые сообщения</h3>
+        <p>Помощник пишет в удалённом интерфейсе, текст появляется у вас в Ghost Note без отдельного мессенджера на экране.</p>
+      </article>
+      <article class="feature-card holo-card" data-reveal data-reveal-delay="3">
+        <h3>Удалённый просмотр экрана</h3>
+        <p>Помощник видит рабочий стол с обновлением ~каждые 2 секунды; может быть в другом городе (удалённый режим) или в той же сети (локальный).</p>
+      </article>
+      <article class="feature-card holo-card" data-reveal data-reveal-delay="4">
+        <h3>Скрытое окно</h3>
+        <p>Программа не отображается в панели задач; скрыть окно: <kbd>Ctrl+Shift+G</kbd>.</p>
+      </article>
+    </div>
+
+    <div class="note-card holo-card note-box" data-reveal>
+      <p>
+        Ghost Note предназначен для технической поддержки <strong>собственного</strong> компьютера
+        по согласованию сторон. Использование для несанкционированного доступа
+        или нарушения правил организатора тестирования <strong>запрещено</strong>.
+      </p>
+    </div>
+  </section>
+
+  <section class="section-block wrap" id="faq">
+    <span class="section-num" aria-hidden="true">02</span>
+    <div data-reveal>
+      <div class="eyebrow"><span class="eyebrow-dot"></span>FAQ</div>
+      <h2 class="section-title gradient-text">Частые вопросы</h2>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item" data-reveal data-reveal-delay="1">
+        <summary>Видна ли Ghost Note при прокторинге и демонстрации экрана?</summary>
+        <p>Нет — окно программы не попадает в трансляцию. Рекомендуем заранее проверить: включите демонстрацию экрана в Zoom или Телемосте и убедитесь, что Ghost Note не видна.</p>
+      </details>
+      <details class="faq-item" data-reveal data-reveal-delay="2">
+        <summary>Можно ли обмениваться текстовыми сообщениями?</summary>
+        <p>Да. Помощник отправляет текст с удалённой страницы просмотра, сообщения отображаются у вас в окне Ghost Note.</p>
+      </details>
+      <details class="faq-item" data-reveal data-reveal-delay="3">
+        <summary>Локальный или удалённый доступ — что выбрать?</summary>
+        <p><strong>Локальный</strong> (2 500 ₽) — вы и помощник в одной Wi‑Fi/мобильной сети. <strong>Удалённый</strong> (3 000 ₽) — помощник может быть где угодно, связь через сервер. Подробнее — на <a href="/#access-types">главной странице</a>.</p>
+      </details>
+      <details class="faq-item" data-reveal data-reveal-delay="4">
+        <summary>Как попробовать бесплатно?</summary>
+        <p>В Telegram-боте <a href="{{ site.ghost_bot_url }}" target="_blank" rel="noopener">{{ site.ghost_bot_username }}</a>: нажмите Start и отправьте <strong>/trial</strong>. Пробный токен на 20 минут, один раз в 7 дней.</p>
+      </details>
+    </div>
+  </section>
+
+  <section class="section-block wrap" id="start">
+    <div class="contact-arena" data-reveal>
+      <div class="contact-arena__inner">
+        <h2 class="gradient-text">Готовы подключить Ghost Note?</h2>
+        <p>Оформите доступ на сайте или получите пробный токен в боте — проверьте, что программа не видна на трансляции, до начала сессии.</p>
+        <div class="contact-actions">
+          <a class="btn btn-primary btn-arrow" href="/buy/">Купить доступ</a>
+          <a class="btn btn-ghost btn-arrow" href="/">Все тарифы и условия</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+(function () {
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var finePointer = window.matchMedia("(pointer: fine)").matches;
+  if (!reduced) {
+    document.querySelectorAll("[data-reveal]").forEach(function (el) {
+      var delay = el.getAttribute("data-reveal-delay");
+      if (delay) el.style.transitionDelay = (parseInt(delay, 10) * 0.1) + "s";
+    });
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: "0px 0px -60px 0px" });
+    document.querySelectorAll("[data-reveal]").forEach(function (el) { observer.observe(el); });
+  } else {
+    document.querySelectorAll("[data-reveal]").forEach(function (el) { el.classList.add("is-visible"); });
+  }
+  document.querySelectorAll(".holo-card").forEach(function (card) {
+    card.addEventListener("mousemove", function (e) {
+      var rect = card.getBoundingClientRect();
+      card.style.setProperty("--card-x", ((e.clientX - rect.left) / rect.width) * 100 + "%");
+      card.style.setProperty("--card-y", ((e.clientY - rect.top) / rect.height) * 100 + "%");
+    });
+  });
+  if (finePointer && !reduced) {
+    document.querySelectorAll(".tilt-card").forEach(function (card) {
+      card.addEventListener("mousemove", function (e) {
+        var rect = card.getBoundingClientRect();
+        var x = (e.clientX - rect.left) / rect.width - 0.5;
+        var y = (e.clientY - rect.top) / rect.height - 0.5;
+        card.style.transform = "perspective(1000px) rotateY(" + (x * 10) + "deg) rotateX(" + (-y * 10) + "deg)";
+      });
+      card.addEventListener("mouseleave", function () { card.style.transform = ""; });
+    });
+  }
+})();
+</script>
+{% endblock %}

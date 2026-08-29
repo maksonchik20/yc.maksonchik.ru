@@ -1,155 +1,468 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Ghost Note{% endblock %} — yc.maksonchik.ru</title>
-    <style>
-        :root {
-            color-scheme: light;
-            --bg: #f4f6f8;
-            --card: #ffffff;
-            --text: #1a1d21;
-            --muted: #5c6670;
-            --accent: #2563eb;
-            --border: #dde3ea;
-        }
-        * { box-sizing: border-box; }
-        body {
-            margin: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg);
-            color: var(--text);
-            line-height: 1.6;
-        }
-        a { color: var(--accent); }
-        .wrap {
-            max-width: 920px;
-            margin: 0 auto;
-            padding: 24px 20px 48px;
-        }
-        header {
-            background: var(--card);
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 24px;
-        }
-        header .wrap {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding-top: 16px;
-            padding-bottom: 16px;
-        }
-        .logo {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--text);
-            text-decoration: none;
-        }
-        nav a {
-            margin-left: 18px;
-            text-decoration: none;
-            color: var(--muted);
-            font-weight: 500;
-        }
-        nav a:hover { color: var(--accent); }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 28px 32px;
-            margin-bottom: 20px;
-        }
-        h1 { margin-top: 0; font-size: 1.75rem; line-height: 1.25; }
-        h2 { font-size: 1.2rem; margin-top: 1.6em; }
-        h2:first-child { margin-top: 0; }
-        h3 { font-size: 1.05rem; margin-top: 1.4em; margin-bottom: 0.5em; }
-        .lead { font-size: 1.05rem; color: var(--muted); }
-        .contacts {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px 32px;
-            margin-top: 16px;
-        }
-        .contacts a, .contacts span {
-            display: block;
-            font-size: 1.05rem;
-            color: var(--text);
-            text-decoration: none;
-        }
-        .contacts small { display: block; color: var(--muted); margin-bottom: 4px; }
-        ul, ol { padding-left: 1.2em; }
-        li { margin-bottom: 0.35em; }
-        .price-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 16px 0;
-            font-size: 0.98rem;
-        }
-        .price-table th, .price-table td {
-            border: 1px solid var(--border);
-            padding: 10px 14px;
-            text-align: left;
-        }
-        .price-table th {
-            background: #f8fafc;
-            font-weight: 600;
-        }
-        .price-table td:last-child { white-space: nowrap; }
-        .note-box {
-            background: #f8fafc;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 14px 16px;
-            font-size: 0.95rem;
-            color: var(--muted);
-        }
-        footer {
-            margin-top: 32px;
-            padding-top: 24px;
-            border-top: 1px solid var(--border);
-            color: var(--muted);
-            font-size: 0.92rem;
-        }
-        footer p { margin: 0.35em 0; }
-        footer nav a {
-            margin-left: 0;
-            margin-right: 16px;
-            color: var(--muted);
-            font-weight: 500;
-        }
-        .oferta-body h2 { font-size: 1.05rem; margin-top: 1.4em; }
-        .oferta-body p, .oferta-body li { font-size: 0.95rem; }
-    </style>
-    {% block extra_head %}{% endblock %}
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{% block page_title %}{{ site.seo_title }}{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}{{ site.seo_description }}{% endblock %}">
+  {% block meta_robots %}{% endblock %}
+  <link rel="canonical" href="{% block canonical_url %}{{ site.url }}{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}{{ site.seo_title }}{% endblock %}">
+  <meta property="og:description" content="{% block og_description %}{{ site.seo_description }}{% endblock %}">
+  <meta property="og:url" content="{% block og_url %}{{ site.url }}{% endblock %}">
+  <meta property="og:type" content="{% block og_type %}website{% endblock %}">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:site_name" content="{{ site.name }}">
+  <meta name="theme-color" content="{{ site.theme_color }}">
+  {% block favicons %}
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="shortcut icon" href="/favicon.svg" type="image/svg+xml">
+  {% endblock %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #020206;
+      --ink: #f8f9ff;
+      --muted: #8b93b8;
+      --line: rgba(255, 255, 255, 0.07);
+      --cyan: #00f5ff;
+      --magenta: #ff3d9a;
+      --violet: #a855f7;
+      --orange: #ff8a3d;
+      --lime: #c8ff00;
+      --gradient-wide: linear-gradient(90deg, var(--cyan), var(--violet), var(--magenta), var(--orange), var(--lime), var(--cyan));
+      /* Compatibility tokens for the purchase flow and shared modal components. */
+      --accent: var(--cyan);
+      --border: rgba(255, 255, 255, 0.12);
+      --card: rgba(9, 11, 24, 0.96);
+      --text: var(--ink);
+      --radius: 22px;
+      --max: 1140px;
+      --gutter: 24px;
+      --font-display: "Syne", system-ui, sans-serif;
+      --font-body: "DM Sans", system-ui, sans-serif;
+      --shadow-glow: 0 0 100px rgba(0, 245, 255, 0.18), 0 0 160px rgba(255, 61, 154, 0.1);
+      --angle: 0deg;
+      --mouse-x: 50%;
+      --mouse-y: 50%;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: var(--font-body);
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.65;
+      overflow-x: hidden;
+      padding-left: calc(var(--gutter) + env(safe-area-inset-left, 0px));
+      padding-right: calc(var(--gutter) + env(safe-area-inset-right, 0px));
+      cursor: none;
+    }
+    body.no-custom-cursor { cursor: auto; }
+    a, button { cursor: none; }
+    button, input, select, textarea { font: inherit; }
+    body.no-custom-cursor a,
+    body.no-custom-cursor button { cursor: pointer; }
+
+    #particles { position: fixed; inset: 0; z-index: -2; pointer-events: none; }
+    .scroll-progress {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%; z-index: 300;
+      background: var(--gradient-wide); background-size: 300% 100%;
+      animation: progress-shimmer 2s linear infinite;
+      box-shadow: 0 0 20px rgba(0, 245, 255, 0.8);
+    }
+    .spotlight {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: radial-gradient(600px circle at var(--mouse-x) var(--mouse-y),
+        rgba(0, 245, 255, 0.06), rgba(168, 85, 247, 0.03) 25%, transparent 55%);
+    }
+    .ambient { position: fixed; inset: 0; z-index: -3; overflow: hidden; pointer-events: none; }
+    .ambient__mesh {
+      position: absolute; inset: -30%;
+      background:
+        radial-gradient(ellipse 50% 40% at 20% 20%, rgba(0,245,255,0.15), transparent),
+        radial-gradient(ellipse 45% 35% at 80% 30%, rgba(255,61,154,0.12), transparent),
+        radial-gradient(ellipse 40% 50% at 50% 80%, rgba(168,85,247,0.1), transparent);
+      animation: mesh-drift 20s ease-in-out infinite alternate;
+      filter: blur(40px);
+    }
+    .ambient__grid {
+      position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 64px 64px;
+      mask-image: radial-gradient(ellipse 100% 80% at 50% 30%, black, transparent 75%);
+      transform: perspective(800px) rotateX(60deg) scale(2);
+      transform-origin: center top;
+      opacity: 0.4;
+    }
+    .ambient__noise {
+      position: absolute; inset: 0; opacity: 0.045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      background-size: 180px 180px;
+      animation: noise-shift 0.5s steps(2) infinite;
+    }
+    .ambient__vignette {
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(2,2,6,0.8) 100%);
+    }
+    .cursor-dot, .cursor-ring {
+      position: fixed; pointer-events: none; z-index: 9999; border-radius: 50%;
+      transform: translate(-50%, -50%); mix-blend-mode: difference;
+    }
+    .cursor-dot { width: 8px; height: 8px; background: #fff; transition: width 0.2s ease, height 0.2s ease; }
+    .cursor-ring { width: 40px; height: 40px; border: 1.5px solid rgba(255,255,255,0.5); }
+    body.cursor-hover .cursor-dot { width: 14px; height: 14px; background: var(--cyan); mix-blend-mode: normal; }
+    body.cursor-hover .cursor-ring { width: 56px; height: 56px; border-color: var(--magenta); }
+
+    @keyframes mesh-drift {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(3%, -2%) scale(1.05); }
+    }
+    @keyframes noise-shift { 0% { transform: translate(0, 0); } 100% { transform: translate(-10px, 5px); } }
+    @keyframes progress-shimmer { to { background-position: 300% 0; } }
+    @keyframes border-spin { to { --angle: 360deg; } }
+    @keyframes text-shimmer { to { background-position: 300% center; } }
+    @property --angle { syntax: "<angle>"; initial-value: 0deg; inherits: false; }
+
+    a { color: inherit; }
+    .wrap { max-width: var(--max); margin: 0 auto; position: relative; }
+
+    .site-header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+      padding: 0 var(--gutter);
+      backdrop-filter: blur(24px) saturate(1.6);
+      -webkit-backdrop-filter: blur(24px) saturate(1.6);
+      background: rgba(2, 2, 6, 0.55);
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), background 0.4s ease;
+    }
+    .site-header.is-hidden { transform: translateY(-100%); }
+    .site-header.is-scrolled { background: rgba(2, 2, 6, 0.85); }
+
+    .nav {
+      max-width: var(--max); margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 0; gap: 16px;
+    }
+    .nav-brand {
+      font-family: var(--font-display); font-size: 1.05rem; font-weight: 800;
+      text-decoration: none; letter-spacing: -0.02em;
+      background: var(--gradient-wide); background-size: 300% auto;
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      animation: text-shimmer 4s linear infinite;
+    }
+    .nav-links { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+    .nav-links a:not(.btn) {
+      text-decoration: none; color: var(--muted); font-weight: 500;
+      font-size: 0.88rem; letter-spacing: 0.02em; text-transform: uppercase;
+      transition: color 0.25s ease;
+    }
+    .nav-links a:not(.btn):hover { color: var(--ink); }
+
+    .btn {
+      position: relative; display: inline-flex; align-items: center; justify-content: center;
+      gap: 8px; padding: 13px 26px; border-radius: 999px; font-weight: 700;
+      min-height: 52px; font-family: inherit; font-size: 0.92rem; line-height: 1.2;
+      text-align: center; text-decoration: none; border: 1px solid transparent; overflow: hidden;
+      transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease,
+        border-color 0.25s ease, background-color 0.25s ease;
+    }
+    .btn-primary {
+      background: var(--gradient-wide); background-size: 300% auto; color: #020206;
+      animation: text-shimmer 3s linear infinite;
+      box-shadow: 0 0 40px rgba(0,245,255,0.3);
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 60px rgba(255,61,154,0.5), 0 0 100px rgba(0,245,255,0.2);
+      transform: translateY(-2px) scale(1.03);
+    }
+    .btn-ghost, .btn-secondary {
+      background: transparent; color: var(--ink);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+    .btn-ghost:hover, .btn-secondary:hover {
+      border-color: var(--cyan);
+      box-shadow: inset 0 0 30px rgba(0,245,255,0.08), 0 0 30px rgba(0,245,255,0.15);
+    }
+    .btn:active { transform: translateY(0) scale(0.98); }
+    .btn:focus-visible,
+    button:focus-visible {
+      outline: 2px solid var(--cyan);
+      outline-offset: 4px;
+    }
+    .btn-arrow::after { content: "→"; transition: transform 0.3s ease; }
+    .btn-arrow:hover::after { transform: translateX(4px); }
+
+    main { padding-bottom: 100px; position: relative; z-index: 1; }
+
+    footer {
+      position: relative; z-index: 1; border-top: 1px solid var(--line);
+      padding: 36px 0 52px; color: var(--muted); font-size: 0.92rem;
+    }
+    .footer-row { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+    .footer-meta { display: grid; gap: 4px; }
+    .footer-links { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+    footer a {
+      color: var(--cyan); text-decoration: none; font-weight: 600;
+      transition: color 0.2s ease, text-shadow 0.2s ease;
+    }
+    footer a:hover { color: var(--magenta); text-shadow: 0 0 30px rgba(255,61,154,0.6); }
+    footer p { margin: 0.35em 0; }
+
+    .holo-card {
+      position: relative; border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.015) 100%);
+      border: 1px solid rgba(255,255,255,0.08);
+      backdrop-filter: blur(20px) saturate(1.5);
+      -webkit-backdrop-filter: blur(20px) saturate(1.5);
+      overflow: hidden;
+      transition: border-color 0.4s ease, box-shadow 0.4s ease;
+    }
+    .holo-card::before {
+      content: ""; position: absolute; inset: 0; pointer-events: none;
+      background: radial-gradient(600px circle at var(--card-x, 50%) var(--card-y, 50%),
+        rgba(0,245,255,0.12), rgba(255,61,154,0.06) 30%, transparent 55%);
+      opacity: 0; transition: opacity 0.4s ease;
+    }
+    .holo-card:hover::before { opacity: 1; }
+    .holo-card:hover { box-shadow: var(--shadow-glow); border-color: rgba(0,245,255,0.2); }
+
+    .gradient-text {
+      background: var(--gradient-wide); background-size: 300% auto;
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      animation: text-shimmer 5s linear infinite;
+    }
+    .section-num {
+      font-family: var(--font-display); font-size: clamp(4rem, 12vw, 8rem);
+      font-weight: 800; line-height: 0.85; letter-spacing: -0.05em;
+      opacity: 0.04; position: absolute; top: -20px; right: 0;
+      pointer-events: none; user-select: none;
+    }
+    [data-reveal] {
+      opacity: 0; transform: translateY(48px);
+      transition: opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1), transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    [data-reveal].is-visible { opacity: 1; transform: translateY(0); }
+
+    .faq-list { margin-top: 48px; display: grid; gap: 12px; max-width: 760px; }
+    .faq-item {
+      border-radius: calc(var(--radius) - 4px);
+      border: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.02); overflow: hidden;
+    }
+    .faq-item summary {
+      padding: 20px 24px; font-weight: 600; cursor: pointer; list-style: none;
+      display: flex; justify-content: space-between; align-items: center; gap: 16px;
+    }
+    .faq-item summary::-webkit-details-marker { display: none; }
+    .faq-item summary::after {
+      content: "+"; font-family: var(--font-display); font-size: 1.4rem; color: var(--cyan);
+    }
+    .faq-item[open] summary::after { transform: rotate(45deg); }
+    .faq-item p { margin: 0; padding: 0 24px 20px; color: var(--muted); font-size: 0.95rem; line-height: 1.7; }
+    .faq-item a { color: var(--cyan); text-decoration: none; font-weight: 600; }
+    .faq-item a:hover { color: var(--magenta); }
+
+    /* Legacy content pages (index, oferta, privacy) */
+    .content-page { padding-top: 100px; padding-bottom: 40px; }
+    .card {
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(145deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 100%);
+      backdrop-filter: blur(20px);
+      padding: clamp(24px, 4vw, 36px);
+      margin-bottom: 20px;
+    }
+    .card h1 { margin-top: 0; font-family: var(--font-display); font-size: clamp(1.6rem, 4vw, 2rem); line-height: 1.2; letter-spacing: -0.03em; }
+    .card h2 { font-family: var(--font-display); font-size: 1.15rem; margin-top: 1.6em; }
+    .card h2:first-child { margin-top: 0; }
+    .card h3 { font-size: 1.05rem; margin-top: 1.4em; margin-bottom: 0.5em; }
+    .lead { font-size: 1.05rem; color: var(--muted); line-height: 1.75; }
+    .card a:not(.btn) { color: var(--cyan); text-decoration: none; font-weight: 600; }
+    .card a:not(.btn):hover { color: var(--magenta); }
+    ul, ol { padding-left: 1.2em; }
+    li { margin-bottom: 0.35em; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+    .price-table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.98rem; }
+    .price-table th, .price-table td {
+      border: 1px solid rgba(255,255,255,0.1); padding: 10px 14px; text-align: left;
+    }
+    .price-table th { background: rgba(255,255,255,0.04); font-weight: 600; }
+    .note-box {
+      background: rgba(255, 138, 61, 0.08);
+      border: 1px solid rgba(255, 138, 61, 0.25);
+      border-left: 3px solid var(--orange);
+      border-radius: calc(var(--radius) - 8px);
+      padding: 14px 16px; font-size: 0.95rem; color: var(--muted);
+    }
+    .contacts { display: flex; flex-wrap: wrap; gap: 20px 32px; margin-top: 16px; }
+    .contacts a, .contacts span { display: block; font-size: 1.05rem; color: var(--ink); text-decoration: none; }
+    .contacts small { display: block; color: var(--muted); margin-bottom: 4px; }
+    .oferta-body p, .oferta-body li { font-size: 0.95rem; color: var(--muted); }
+    kbd {
+      padding: 2px 8px; border-radius: 6px; font-size: 0.88em;
+      background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.12);
+    }
+
+    @media (max-width: 720px) {
+      :root { --gutter: 28px; }
+      .hide-sm { display: none; }
+      body { cursor: auto; }
+      a, button { cursor: pointer; }
+      .cursor-dot, .cursor-ring { display: none; }
+      .content-page { padding-top: 88px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      [data-reveal] { opacity: 1; transform: none; }
+      body { cursor: auto; }
+      .cursor-dot, .cursor-ring { display: none; }
+      #particles { display: none; }
+    }
+  </style>
+  {% block extra_head %}{% endblock %}
 </head>
 <body>
-    <header>
-        <div class="wrap">
-            <a class="logo" href="/">{{ site.name }}</a>
-            <nav>
-                <a href="/">Услуги и тарифы</a>
-                <a href="/oferta/">Оферта</a>
-                <a href="/privacy/">Политика ПДн</a>
-            </nav>
-        </div>
-    </header>
-    <main class="wrap">
-        {% block content %}{% endblock %}
-        <footer>
-            <p><strong>Исполнитель:</strong> {{ site.status }}</p>
-            <p><strong>ИНН:</strong> {{ site.inn }}</p>
-            <p><strong>Телефон:</strong> <a href="tel:{{ site.phone_tel }}">{{ site.phone_display }}</a></p>
-            <p><strong>E-mail:</strong> <a href="mailto:{{ site.email }}">{{ site.email }}</a></p>
-            <p><strong>Сайт:</strong> <a href="{{ site.url }}">{{ site.url }}</a></p>
-            {% block footer_support %}{% endblock %}
-            <nav>
-                <a href="/oferta/">Публичная оферта</a>
-                <a href="/privacy/">Политика обработки персональных данных</a>
-            </nav>
-        </footer>
-    </main>
+  <canvas id="particles" aria-hidden="true"></canvas>
+  <div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+  <div class="spotlight" id="spotlight" aria-hidden="true"></div>
+  <div class="cursor-dot" id="cursor-dot" aria-hidden="true"></div>
+  <div class="cursor-ring" id="cursor-ring" aria-hidden="true"></div>
+  <div class="ambient" aria-hidden="true">
+    <div class="ambient__mesh"></div>
+    <div class="ambient__grid"></div>
+    <div class="ambient__noise"></div>
+    <div class="ambient__vignette"></div>
+  </div>
+
+  <header class="site-header" id="site-header">
+    <nav class="nav" aria-label="Главная навигация">
+      {% block nav_brand %}
+      <a class="nav-brand" href="/">{{ site.name }}</a>
+      {% endblock %}
+      <div class="nav-links">
+        {% block nav_links %}
+        <a class="hide-sm" href="/">Тарифы</a>
+        <a class="hide-sm" href="/proktoring/">Прокторинг</a>
+        <a class="hide-sm" href="/oferta/">Оферта</a>
+        <a class="hide-sm" href="/privacy/">ПДн</a>
+        {% endblock %}
+        {% block nav_cta %}
+        <a class="btn btn-primary" href="/buy/">Купить доступ</a>
+        {% endblock %}
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer>
+    <div class="wrap footer-row">
+      {% block footer_inner %}
+      <div class="footer-meta">
+        <div>© {{ site.name }} · <a href="{{ site.url }}">yc.maksonchik.ru</a></div>
+        <p><strong>Исполнитель:</strong> {{ site.status }}</p>
+        <p><strong>ИНН:</strong> {{ site.inn }}</p>
+      </div>
+      <div class="footer-links">
+        <a href="tel:{{ site.phone_tel }}">{{ site.phone_display }}</a>
+        <a href="mailto:{{ site.email }}">{{ site.email }}</a>
+        <a href="/oferta/">Оферта</a>
+        <a href="/privacy/">Политика ПДн</a>
+      </div>
+      {% endblock %}
+    </div>
+  </footer>
+
+  <script>
+  (function () {
+    var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var finePointer = window.matchMedia("(pointer: fine)").matches;
+    var mobile = window.matchMedia("(max-width: 720px)").matches;
+    document.documentElement.style.setProperty("--mouse-x", "50%");
+    document.documentElement.style.setProperty("--mouse-y", "50%");
+    if (!finePointer || mobile || reduced) document.body.classList.add("no-custom-cursor");
+
+    var progress = document.getElementById("scroll-progress");
+    var header = document.getElementById("site-header");
+    var lastScroll = 0;
+    window.addEventListener("scroll", function () {
+      var y = window.scrollY;
+      var h = document.documentElement.scrollHeight - window.innerHeight;
+      if (progress) progress.style.width = (h > 0 ? (y / h) * 100 : 0) + "%";
+      if (header) {
+        header.classList.toggle("is-scrolled", y > 60);
+        if (y > 400 && y > lastScroll + 8) header.classList.add("is-hidden");
+        else if (y < lastScroll - 8 || y < 200) header.classList.remove("is-hidden");
+      }
+      lastScroll = y;
+    }, { passive: true });
+
+    if (finePointer && !mobile && !reduced) {
+      var dot = document.getElementById("cursor-dot");
+      var ring = document.getElementById("cursor-ring");
+      var mx = 0, my = 0, rx = 0, ry = 0;
+      window.addEventListener("mousemove", function (e) {
+        mx = e.clientX; my = e.clientY;
+        document.documentElement.style.setProperty("--mouse-x", mx + "px");
+        document.documentElement.style.setProperty("--mouse-y", my + "px");
+      }, { passive: true });
+      function animCursor() {
+        rx += (mx - rx) * 0.15; ry += (my - ry) * 0.15;
+        if (dot) { dot.style.left = mx + "px"; dot.style.top = my + "px"; }
+        if (ring) { ring.style.left = rx + "px"; ring.style.top = ry + "px"; }
+        requestAnimationFrame(animCursor);
+      }
+      animCursor();
+      document.querySelectorAll("a, button, .holo-card, .btn").forEach(function (el) {
+        el.addEventListener("mouseenter", function () { document.body.classList.add("cursor-hover"); });
+        el.addEventListener("mouseleave", function () { document.body.classList.remove("cursor-hover"); });
+      });
+    }
+
+    if (!reduced && !mobile) {
+      var canvas = document.getElementById("particles");
+      if (canvas) {
+        var ctx = canvas.getContext("2d");
+        var particles = [];
+        var mouse = { x: -9999, y: -9999 };
+        var count = Math.min(80, Math.floor(window.innerWidth / 16));
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        resize();
+        window.addEventListener("resize", resize);
+        for (var i = 0; i < count; i++) {
+          particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height,
+            vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4, r: Math.random() * 1.5 + 0.5 });
+        }
+        window.addEventListener("mousemove", function (e) { mouse.x = e.clientX; mouse.y = e.clientY; }, { passive: true });
+        function draw() {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          for (var i = 0; i < particles.length; i++) {
+            var p = particles[i];
+            p.x += p.vx; p.y += p.vy;
+            if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+            if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+            var dx = mouse.x - p.x, dy = mouse.y - p.y, dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 120) { p.x -= dx * 0.02; p.y -= dy * 0.02; }
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fillStyle = "rgba(0, 245, 255, 0.5)"; ctx.fill();
+          }
+          requestAnimationFrame(draw);
+        }
+        draw();
+      }
+    }
+  })();
+  </script>
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

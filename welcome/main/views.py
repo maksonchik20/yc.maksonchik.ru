@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import json
 
 import requests
@@ -26,12 +28,40 @@ def index(request):
     return render(request, 'main/index.html')
 
 
+def proktoring(request):
+    return render(request, 'main/proktoring.html')
+
+
 def oferta(request):
     return render(request, 'main/oferta.html')
 
 
 def privacy(request):
     return render(request, 'main/privacy.html')
+
+
+def _read_root_file(name: str, content_type: str) -> HttpResponse:
+    path = Path(__file__).resolve().parent.parent / name
+    return HttpResponse(path.read_text(encoding="utf-8"), content_type=content_type)
+
+
+def sitemap_xml(request):
+    return _read_root_file("sitemap.xml", "application/xml; charset=UTF-8")
+
+
+def robots_txt(request):
+    return _read_root_file("robots.txt", "text/plain; charset=UTF-8")
+
+
+def favicon_svg(request):
+    return _read_root_file("favicon.svg", "image/svg+xml")
+
+
+def indexnow_key_file(request):
+    """Ключ IndexNow в корне сайта (UTF-8, без HTML)."""
+    from .site_info import INDEXNOW_KEY
+
+    return _read_root_file(f"{INDEXNOW_KEY}.txt", "text/plain; charset=UTF-8")
 
 
 @csrf_exempt
