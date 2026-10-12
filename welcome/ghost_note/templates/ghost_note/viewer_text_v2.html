@@ -50,6 +50,7 @@
   </main>
   {{ session_id|json_script:"ghost-session" }}
   {{ viewer_key|json_script:"ghost-viewer-key" }}
+  {% include "ghost_note/viewer_text_sender.html" %}
   <script>
     (() => {
       'use strict';
@@ -59,57 +60,12 @@
       const text = document.getElementById('text');
       const send = document.getElementById('send');
       const status = document.getElementById('status');
-      let busy = false;
-
-      function showStatus(message, state) {
-        status.textContent = message;
-        status.dataset.state = state;
-      }
-
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        if (busy) return;
-        const message = text.value;
-        if (!message.trim()) {
-          showStatus('Сначала напишите сообщение.', 'error');
-          text.focus();
-          return;
-        }
-        busy = true;
-        send.disabled = true;
-        send.textContent = 'Отправляем…';
-        showStatus('Отправляем сообщение…', 'sending');
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 15000);
-        try {
-          const response = await fetch('/ghost/v2/text/', {
-            method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error',
-            headers: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY },
-            body: JSON.stringify({ session_id: SESSION_ID, text: message }),
-            signal: controller.signal
-          });
-          if (response.status === 401) {
-            showStatus('Сессия недоступна. Переподключитесь в Ghost Note на компьютере и откройте актуальную ссылку viewer.', 'error');
-            return;
-          }
-          if (response.status === 403) {
-            showStatus('Отправка текста для этого доступа выключена. Проверьте разрешения токена.', 'error');
-            return;
-          }
-          if (!response.ok) throw new Error('request_failed');
-          const result = await response.json();
-          if (result.ok !== true) throw new Error('invalid_response');
-          if (text.value === message) text.value = '';
-          showStatus('Сообщение отправлено. Оно появится в приложении при активном подключении.', 'sent');
-        } catch (_error) {
-          showStatus('Нет ответа от сервера. Текст сохранён — проверьте интернет и повторите отправку.', 'error');
-        } finally {
-          clearTimeout(timeout);
-          busy = false;
-          send.disabled = false;
-          send.textContent = 'Отправить текст';
-        }
+      const sendText = createGhostTextSender({
+        text: text, button: send, status: status,
+        url: '/ghost/v2/text/', sessionId: SESSION_ID, clearOnSuccess: true,
+        headerToValue: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY }
       });
+      form.addEventListener('submit', sendText);
 
       text.addEventListener('keydown', (event) => {
         if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {

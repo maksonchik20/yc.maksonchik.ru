@@ -16,6 +16,7 @@ from .auth import (
 )
 from .audio_store import append_audio, clear_audio, poll_audio as consume_audio
 from .models import GhostSession, GhostTextMessage
+from .text_delivery import TextDeliveryError, store_viewer_text
 
 JSON_UTF8 = {'ensure_ascii': False}
 
@@ -201,6 +202,8 @@ def post_text(request):
     except (json.JSONDecodeError, UnicodeDecodeError):
         return JsonResponse({'error': 'invalid json'}, status=400)
 
+    if not isinstance(payload, dict):
+        return JsonResponse({'error': 'invalid json'}, status=400)
     session_id = payload.get('session_id', '')
     text = payload.get('text', '')
     if not isinstance(text, str):
@@ -214,7 +217,10 @@ def post_text(request):
     if denied is not None:
         return denied
 
-    GhostTextMessage.objects.create(session=session, text=text)
+    try:
+        store_viewer_text(session, text, payload.get('idempotency_key'))
+    except TextDeliveryError as error:
+        return JsonResponse({'error': error.code}, status=error.status)
     return JsonResponse({'ok': True})
 
 

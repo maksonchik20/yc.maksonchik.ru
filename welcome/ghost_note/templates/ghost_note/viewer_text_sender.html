@@ -1,0 +1,119 @@
+<script>
+  function createGhostTextSender(options) {
+    'use strict';
+    const text = options.text;
+    const button = options.button;
+    const status = options.status;
+    const readyLabel = button.textContent;
+    let busy = false;
+    let pendingAttempt = null;
+    let uncertain = false;
+
+    function showStatus(message, state) {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function newKey() {
+      if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64;
+      bytes[8] = (bytes[8] & 63) | 128;
+      const hex = Array.from(bytes, value => value.toString(16).padStart(2, '0')).join('');
+      return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+    }
+
+    function permanentError(statusCode) {
+      if (statusCode === 401) return 'Сессия недоступна. Переподключитесь в Ghost Note на компьютере и откройте актуальную ссылку viewer.';
+      if (statusCode === 403) return 'Отправка текста для этого доступа выключена. Проверьте разрешения токена.';
+      if (statusCode === 409) return 'Сервер отклонил повторный запрос: содержимое сообщения не совпадает. Текст оставлен в поле ввода.';
+      return 'Сервер отклонил сообщение (HTTP ' + statusCode + '). Проверьте текст и доступ к сессии.';
+    }
+
+    return async function sendText(event) {
+      if (event) event.preventDefault();
+      if (busy) return;
+      const message = uncertain && pendingAttempt ? pendingAttempt.message : text.value;
+      if (!message.trim()) {
+        showStatus('Сначала напишите сообщение.', 'error');
+        text.focus();
+        return;
+      }
+      try {
+        if (!pendingAttempt || pendingAttempt.message !== message) {
+          pendingAttempt = { message: message, key: newKey() };
+        }
+      } catch (_error) {
+        showStatus('Не удалось подготовить безопасную отправку. Откройте viewer в актуальном браузере через HTTPS.', 'error');
+        return;
+      }
+      busy = true;
+      button.disabled = true;
+      button.textContent = 'Отправляем…';
+      text.readOnly = true;
+      const requestBody = JSON.stringify({
+        session_id: options.sessionId,
+        text: pendingAttempt.message,
+        idempotency_key: pendingAttempt.key
+      });
+      try {
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          showStatus(attempt ? 'Нет подтверждения. Повторяем тот же запрос…' : 'Отправляем сообщение…', 'sending');
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 8000);
+          let retryDelay = 500 * (attempt + 1);
+          try {
+            const response = await fetch(options.url, {
+              method: 'POST', cache: 'no-store', credentials: 'omit', redirect: 'error',
+              headers: options.headerToValue,
+              body: requestBody,
+              signal: controller.signal
+            });
+            if (response.ok) {
+              const result = await response.json();
+              if (result.ok !== true) throw new Error('invalid_response');
+              if (options.clearOnSuccess && text.value === pendingAttempt.message) text.value = '';
+              pendingAttempt = null;
+              uncertain = false;
+              showStatus('Принято сервером. Это ещё не подтверждение получения приложением.', 'sent');
+              return;
+            }
+            if (response.status !== 429 && response.status < 500) {
+              // Keep the key for a manual retry of the unchanged message.
+              const earlierAttemptWarning = uncertain
+                ? ' Предыдущая попытка могла быть принята. Повтор неизменённого текста использует тот же запрос; изменение создаст новое сообщение.'
+                : '';
+              uncertain = false;
+              showStatus(permanentError(response.status) + earlierAttemptWarning, 'error');
+              return;
+            }
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('Retry-After');
+              if (retryAfter) {
+                const seconds = Number(retryAfter);
+                retryDelay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(retryAfter) - Date.now();
+                if (!Number.isFinite(retryDelay)) retryDelay = 1000;
+                // Do not exceed the retry bound or retry before the server allows it.
+                if (retryDelay > 5000) break;
+                retryDelay = Math.max(0, retryDelay);
+              }
+            }
+          } catch (_error) {
+            // An aborted response may already have been committed by the server.
+          } finally {
+            clearTimeout(timeout);
+          }
+          uncertain = true;
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, retryDelay));
+        }
+        uncertain = true;
+        showStatus('Ответ сервера не получен. Текст сохранён в этом окне. Нажмите «Повторить отправку» — будет повторён тот же запрос без создания копии.', 'error');
+      } finally {
+        busy = false;
+        button.disabled = false;
+        button.textContent = uncertain ? 'Повторить отправку' : readyLabel;
+        text.readOnly = uncertain;
+      }
+    };
+  }
+</script>

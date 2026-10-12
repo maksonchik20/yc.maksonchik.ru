@@ -333,6 +333,8 @@ class SecurityV2Tests(SecurityFixture):
 
 def load_relay():
     path = Path(__file__).resolve().parent.parent / 'scripts' / 'ghost_audio_relay.py'
+    if not path.is_file():
+        path = Path(__file__).resolve().parents[2] / 'scripts' / 'ghost_audio_relay.py'
     spec = importlib.util.spec_from_file_location('ghost_relay_test_v2', path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

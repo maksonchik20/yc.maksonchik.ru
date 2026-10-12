@@ -14,6 +14,8 @@ from .audio_store import append_audio, clear_audio, poll_audio as consume_audio
 from .models import GhostAIRequest, GhostSession, GhostTextMessage
 from .security_v2 import (SecurityError, challenge_response, lease_response,
                           read_json, require_session, require_text_session, require_screen_session)
+from .text_delivery import (TextDeliveryError, acknowledge_messages, inbox_messages,
+                            store_viewer_text)
 
 
 def protected_response(view):
@@ -21,6 +23,8 @@ def protected_response(view):
     def wrapped(request, *args, **kwargs):
         try:
             response = view(request, *args, **kwargs)
+        except TextDeliveryError as error:
+            response = JsonResponse({'ok': False, 'error': error.code}, status=error.status)
         except SecurityError as error:
             fieldToError = {'ok': False, 'error': error.code}
             if error.message:
@@ -165,7 +169,25 @@ def post_text(request):
     text = fieldToValue.get('text', '')
     if not isinstance(text, str):
         return JsonResponse({'error': 'text must be string'}, status=400)
-    GhostTextMessage.objects.create(session=session, text=text)
+    store_viewer_text(session, text, fieldToValue.get('idempotency_key'))
+    return JsonResponse({'ok': True})
+
+
+@require_GET
+@protected_response
+def text_inbox(request):
+    session = request_session(request, text=True)
+    return JsonResponse({'protocol': 'ack-v1', 'messages': inbox_messages(session)},
+                        json_dumps_params={'ensure_ascii': False})
+
+
+@csrf_exempt
+@require_POST
+@protected_response
+def acknowledge_text(request):
+    fieldToValue = read_json(request, limit=8192)
+    session = request_session(request, fieldToValue=fieldToValue, text=True)
+    acknowledge_messages(session, fieldToValue.get('message_ids'))
     return JsonResponse({'ok': True})
 
 

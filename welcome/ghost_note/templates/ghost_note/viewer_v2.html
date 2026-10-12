@@ -163,6 +163,7 @@
       <textarea id="text" placeholder="Текст для окна на ПК…"></textarea>
       <button type="button" id="send">Отправить</button>
     </div>
+    <p class="status" id="textStatus" role="status" aria-live="polite">Готово к отправке текста</p>
     {% if audio_allowed %}<div class="btn-row">
       <button type="button" id="audioBtn" class="secondary">Включить звук</button>
     </div>{% endif %}
@@ -170,6 +171,7 @@
     <p class="status" id="status">Обновление каждые 2 с</p>
     <p class="note">⌘/Ctrl + +/− — масштаб. При зуме — перетаскивание, трекпад или прокрутка. Ctrl+Enter — отправить.</p>
   </main>
+  {% include "ghost_note/viewer_text_sender.html" %}
   <script>
     function initScreenZoom(wrap, pan, img) {
       let userScale = 1;
@@ -433,28 +435,15 @@
       }
     }
 
-    async function sendText() {
-      const text = textArea.value;
-      if (!text.trim()) return;
-      sendBtn.disabled = true;
-      try {
-        const r = await fetch('/ghost/v2/text/', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY },
-          body: JSON.stringify({ session_id: SESSION_ID, text: text })
-        });
-        if (!r.ok) throw new Error(r.status);
-        statusEl.textContent = 'Текст отправлен';
-      } catch (e) {
-        statusEl.textContent = 'Ошибка отправки текста';
-      } finally {
-        sendBtn.disabled = false;
-      }
-    }
+    const sendText = createGhostTextSender({
+      text: textArea, button: sendBtn, status: document.getElementById('textStatus'),
+      url: '/ghost/v2/text/', sessionId: SESSION_ID,
+      headerToValue: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY }
+    });
 
     sendBtn.addEventListener('click', sendText);
     textArea.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.key === 'Enter') sendText();
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') sendText(e);
     });
 
     refreshScreenshot();
