@@ -1,0 +1,17 @@
+[Unit]
+Description=Deliver pending Ghost Note Telegram messages
+After=network.target mysql.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/usr/share/django-projects/welcome
+Environment=DJANGO_SETTINGS_MODULE=welcome.settings
+ExecStart=/usr/share/django-projects/welcome/venv/bin/python manage.py process_ghost_outbox --limit 50 --loop --poll-interval 2
+Restart=always
+RestartSec=2
+TimeoutStopSec=300
+
+[Install]
+WantedBy=multi-user.target

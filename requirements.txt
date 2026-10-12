@@ -5,3 +5,7 @@ openai
 pillow
 websockets>=10,<13
 requests>=2.28,<3
+# Versioned GhostNote license signatures
+# Existing Python 3.8 production runtime; upgrading the runtime is a separate change.
+cryptography==47.0.0; python_version < '3.9'
+cryptography>=48,<51; python_version >= '3.9'

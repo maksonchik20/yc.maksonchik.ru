@@ -1,7 +1,10 @@
+from pathlib import Path
+
 from django.http import HttpResponse, HttpRequest
 from django.views.decorators.csrf import csrf_exempt
 import json
 from .models import UserTg, Message, FileType, WhoUpdateBotEvent
+from .activity_mirror import ActivityBatchConflict, record_activity_batch
 import html
 from .telegram import (
     tg_send_message,
@@ -18,6 +21,12 @@ from .inner_models.BusinessConnection import BusinessConnection
 @csrf_exempt
 def index(request: HttpRequest):
     return HttpResponse(f"maksonchik website Xo-Xo")
+
+
+def yandex_webmaster_verify(request: HttpRequest):
+    """Файл подтверждения Яндекс.Вебмастера в корне сайта."""
+    path = Path(__file__).resolve().parent.parent / "yandex_1cf6644d705ed152.html"
+    return HttpResponse(path.read_text(encoding="utf-8"), content_type="text/html; charset=UTF-8")
 
 @csrf_exempt
 def webhook_tg(request: HttpRequest):
@@ -345,6 +354,8 @@ def is_deleted_message(data):
 def who_update_event(request: HttpRequest):
     if request.method != "POST":
         return HttpResponse(status=405)
+    if len(request.body) > 16384:
+        return HttpResponse(status=413)
     try:
         from env import WHO_UPDATE_EVENT_TOKEN
     except ImportError:
@@ -353,16 +364,29 @@ def who_update_event(request: HttpRequest):
     if not WHO_UPDATE_EVENT_TOKEN or token != WHO_UPDATE_EVENT_TOKEN:
         return HttpResponse(status=403)
     try:
-        data = json.loads(request.body.decode("utf-8"))
+        fieldToPayload = json.loads(request.body.decode("utf-8"))
     except (json.JSONDecodeError, UnicodeDecodeError):
         return HttpResponse(status=400)
 
+    if not isinstance(fieldToPayload, dict):
+        return HttpResponse(status=400)
+    if fieldToPayload.get("kind") == "activity_batch_v1":
+        try:
+            record_activity_batch(fieldToPayload)
+        except ActivityBatchConflict:
+            return HttpResponse(status=409)
+        except ValueError:
+            return HttpResponse(status=400)
+        return HttpResponse("ok")
+    if "kind" in fieldToPayload:
+        return HttpResponse(status=400)
+
     WhoUpdateBotEvent.objects.create(
-        chat_id=data.get("chat_id"),
-        message_id=data.get("message_id"),
-        business_connection_id=data.get("business_connection_id") or "",
-        username_from=data.get("username_from") or "",
-        first_name=data.get("first_name") or "",
-        payload=json.dumps(data, ensure_ascii=False),
+        chat_id=fieldToPayload.get("chat_id"),
+        message_id=fieldToPayload.get("message_id"),
+        business_connection_id=fieldToPayload.get("business_connection_id") or "",
+        username_from=fieldToPayload.get("username_from") or "",
+        first_name=fieldToPayload.get("first_name") or "",
+        payload=json.dumps(fieldToPayload, ensure_ascii=False),
     )
     return HttpResponse("ok")

@@ -119,4 +119,7 @@ def issue_trial_token(*, telegram_user_id, username=''):
     )
     contact.last_trial_at = now
     contact.save(update_fields=['last_trial_at'])
+    # Persist the reply in the same transaction as the token and cooldown.
+    from .telegram_notify import notify_trial_token
+    notify_trial_token(chat_id=telegram_user_id, token=token)
     return token

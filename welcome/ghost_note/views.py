@@ -53,6 +53,9 @@ def _get_or_create_session(session_id, access_token=None):
         return None
 
     session, created = GhostSession.objects.get_or_create(session_id=session_id)
+    # Do not attach a new legacy token to an orphaned, protected v2 session.
+    if hasattr(session, 'security_v2'):
+        return None
     if created and access_token is not None:
         session.access_token = access_token
         session.save(update_fields=['access_token'])
@@ -240,7 +243,14 @@ def poll_text(request):
     if pending:
         GhostTextMessage.objects.filter(pk__in=[m.pk for m in pending]).update(delivered=True)
 
-    return JsonResponse({'messages': messages}, json_dumps_params=JSON_UTF8)
+    # Older Windows clients mistake a literal ']' inside a JSON string for the
+    # end of the messages array. They already decode JSON Unicode escapes.
+    # Escape brackets only in string values; keep both text and array intact.
+    encoded = [
+        json.dumps(message, **JSON_UTF8).replace('[', '\\u005b').replace(']', '\\u005d')
+        for message in messages
+    ]
+    return HttpResponse('{"messages": [' + ', '.join(encoded) + ']}', content_type='application/json')
 
 
 @csrf_exempt

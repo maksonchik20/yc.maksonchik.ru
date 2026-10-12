@@ -6,7 +6,7 @@ from datetime import timedelta
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from webhook_tg.models import WhoUpdateBotEvent
+from webhook_tg.activity_mirror import latest_activity_at
 from webhook_tg.owner_notify import notify_owner
 
 
@@ -51,7 +51,8 @@ class Command(BaseCommand):
             return
 
         threshold = now - timedelta(hours=1)
-        if WhoUpdateBotEvent.objects.filter(received_at__gte=threshold).exists():
+        last_event_at = latest_activity_at()
+        if last_event_at is not None and last_event_at >= threshold:
             self.stdout.write(f"OK: events since {threshold:%H:%M}")
             return
 
@@ -72,9 +73,8 @@ class Command(BaseCommand):
             self.stdout.write(f"skipped: cooldown ({now_ts - last_alert}s < {cooldown}s)")
             return
 
-        last_event = WhoUpdateBotEvent.objects.order_by("-received_at").first()
-        if last_event:
-            last_str = timezone.localtime(last_event.received_at).strftime("%d.%m.%Y %H:%M:%S")
+        if last_event_at is not None:
+            last_str = timezone.localtime(last_event_at).strftime("%d.%m.%Y %H:%M:%S")
         else:
             last_str = "нет данных"
 

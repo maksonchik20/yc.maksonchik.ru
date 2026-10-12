@@ -15,6 +15,7 @@ from django.utils.html import format_html
 from django.utils.safestring import mark_safe
 from django.utils import timezone
 
+from .activity_admin import TokenActivityAdminMixin
 from .auth import format_token_datetime
 from .telegram_notify import is_ghost_bot_configured, send_bot_message
 from .bot_logging import format_chat_message_html, resolve_chat_id, strip_html
@@ -28,6 +29,7 @@ from .models import (
     GhostSession,
     GhostTelegramBotMessage,
     GhostTelegramContact,
+    GhostTelegramOutbox,
     GhostTextMessage,
     GhostUser,
     TEST_TOKEN_DURATION,
@@ -67,8 +69,9 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
         fields = '__all__'
 
     def _current_token_type(self):
-        if self.data.get('token_type'):
-            return self.data['token_type']
+        token_type_key = self.add_prefix('token_type')
+        if self.data.get(token_type_key):
+            return self.data[token_type_key]
         if self.initial.get('token_type'):
             return self.initial['token_type']
         if self.instance.pk:
@@ -78,6 +81,10 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         token_type = self._current_token_type()
+        # Older open forms and the user inline don't submit the new controls.
+        for name in ('max_devices', 'max_concurrent_sessions', 'screenshot_retention_days', 'ai_daily_request_limit'):
+            if name in self.fields:
+                self.fields[name].required = False
         self.fields['payment_amount'].label = 'Сумма оплаты'
         self.fields['starts_at'].help_text = (
             'Для тестового токена при выборе типа подставляется автоматически: сейчас. Можно изменить вручную.'
@@ -93,10 +100,15 @@ class GhostAccessTokenAdminForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
+        for name in ('max_devices', 'max_concurrent_sessions', 'screenshot_retention_days', 'ai_daily_request_limit'):
+            if name in self.fields and cleaned.get(name) is None:
+                cleaned[name] = getattr(self.instance, name)
+        if 'screenshot_retention_days' in cleaned and not 1 <= cleaned['screenshot_retention_days'] <= 30:
+            self.add_error('screenshot_retention_days', 'Укажите от 1 до 30 дней.')
         allow_local = cleaned.get('allow_local')
         allow_remote = cleaned.get('allow_remote')
-        if allow_local is False and allow_remote is False:
-            raise ValidationError('Выберите хотя бы один вариант использования: локальный или удалённый.')
+        if allow_local is False and allow_remote is False and not cleaned.get('allow_ai'):
+            raise ValidationError('Выберите хотя бы один вариант использования: локальный, удалённый или с нейросетью.')
 
         token_type = cleaned.get('token_type')
         starts_at = cleaned.get('starts_at')
@@ -177,15 +189,8 @@ def _format_telegram_link(user):
     )
 
 
-class GhostAccessTokenInlineForm(forms.ModelForm):
-    class Meta:
-        model = GhostAccessToken
-        fields = '__all__'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if 'token_type' in self.fields:
-            _apply_token_type_onchange(self.fields['token_type'])
+class GhostAccessTokenInlineForm(GhostAccessTokenAdminForm):
+    """Use the same scheduling and validation rules in both admin forms."""
 
 
 class GhostAccessTokenInline(admin.TabularInline):
@@ -197,13 +202,16 @@ class GhostAccessTokenInline(admin.TabularInline):
         'token_type',
         'token',
         'payment_amount',
-        'starts_at_msk',
-        'expires_at_msk',
+        'starts_at',
+        'expires_at',
         'is_active',
+        'allow_local',
+        'allow_remote',
+        'allow_ai',
         'viewer_link',
         'delete_token_link',
     )
-    readonly_fields = ('token', 'starts_at_msk', 'expires_at_msk', 'viewer_link', 'delete_token_link')
+    readonly_fields = ('token', 'viewer_link', 'delete_token_link')
     show_change_link = True
 
     @admin.display(description='Действителен с')
@@ -215,13 +223,16 @@ class GhostAccessTokenInline(admin.TabularInline):
         return format_token_datetime(obj.expires_at)
 
     def viewer_link(self, obj):
-        from urllib.parse import quote
+        from .session_links import viewer_path_for_token
 
         if not obj.token:
             return '—'
+        viewer_path = viewer_path_for_token(obj)
+        if not viewer_path:
+            return 'Откройте Ghost Note на компьютере'
         return format_html(
-            '<a href="/ghost/viewer/?token={}" target="_blank">viewer</a>',
-            quote(obj.token, safe=''),
+            '<a href="{}" target="_blank" rel="noopener noreferrer">viewer</a>',
+            viewer_path,
         )
 
     viewer_link.short_description = 'Viewer'
@@ -255,6 +266,7 @@ class GhostUserAdmin(admin.ModelAdmin):
     list_filter = ('referred_by',)
     search_fields = ('name', 'telegram_username', 'notes', 'referral_key')
     autocomplete_fields = ('referred_by',)
+    ordering = ('name', 'pk')
     readonly_fields = (
         'referral_key',
         'created_at_msk',
@@ -368,7 +380,7 @@ class GhostUserAdmin(admin.ModelAdmin):
 
 
 @admin.register(GhostAccessToken)
-class GhostAccessTokenAdmin(admin.ModelAdmin):
+class GhostAccessTokenAdmin(TokenActivityAdminMixin, admin.ModelAdmin):
     form = GhostAccessTokenAdminForm
     change_form_template = 'admin/ghost_note/ghost_admin_change_form.html'
     add_form_template = 'admin/ghost_note/ghost_admin_change_form.html'
@@ -379,15 +391,16 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
         'payment_amount',
         'allow_local',
         'allow_remote',
+        'allow_ai',
         'starts_at_msk',
         'expires_at_msk',
         'is_active',
         'last_used_at_msk',
     )
-    list_filter = ('token_type', 'is_active', 'allow_local', 'allow_remote', 'user')
+    list_filter = ('token_type', 'is_active', 'allow_local', 'allow_remote', 'allow_ai', 'user')
     search_fields = ('token', 'label', 'user__name', 'user__telegram_username')
     autocomplete_fields = ('user',)
-    readonly_fields = ('token', 'created_at_msk', 'last_used_at_msk', 'viewer_link')
+    readonly_fields = ('token', 'created_at_msk', 'last_used_at_msk', 'viewer_link', 'devices_section', 'sessions_section', 'messages_section', 'screenshots_section', 'ai_section', 'last_ai_used_at')
     fieldsets = (
         (None, {
             'fields': (
@@ -401,9 +414,15 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
                 'is_active',
                 'allow_local',
                 'allow_remote',
+                'allow_ai',
                 'viewer_link',
             ),
         }),
+        ('Устройства', {'fields': ('max_devices', 'devices_section')}),
+        ('Сессии', {'fields': ('max_concurrent_sessions', 'sessions_section')}),
+        ('Сообщения', {'fields': ('messages_section',)}),
+        ('Скриншоты', {'fields': ('activity_recording_enabled', 'screenshot_retention_days', 'screenshots_section')}),
+        ('Нейросеть', {'fields': ('ai_daily_request_limit', 'last_ai_used_at', 'ai_section')}),
         ('Служебное', {
             'fields': ('created_at_msk', 'last_used_at_msk'),
         }),
@@ -435,13 +454,16 @@ class GhostAccessTokenAdmin(admin.ModelAdmin):
         return format_token_datetime(obj.created_at)
 
     def viewer_link(self, obj):
-        from urllib.parse import quote
+        from .session_links import viewer_path_for_token
 
         if not obj.token:
             return '—'
+        viewer_path = viewer_path_for_token(obj)
+        if not viewer_path:
+            return 'Откройте Ghost Note на компьютере'
         return format_html(
-            '<a href="/ghost/viewer/?token={}" target="_blank">/ghost/viewer/?token=…</a>',
-            quote(obj.token, safe=''),
+            '<a href="{}" target="_blank" rel="noopener noreferrer">Открыть viewer</a>',
+            viewer_path,
         )
 
     viewer_link.short_description = 'Ссылка viewer'
@@ -720,7 +742,7 @@ class GhostSessionAdmin(admin.ModelAdmin):
 @admin.register(GhostTextMessage)
 class GhostTextMessageAdmin(admin.ModelAdmin):
     list_display = ('session', 'text_preview', 'delivered', 'created_at')
-    list_filter = ('delivered',)
+    list_filter = ('delivered', 'source', 'session__access_token')
     search_fields = ('text', 'session__session_id')
 
     def text_preview(self, obj):
@@ -979,21 +1001,17 @@ class GhostTelegramBotMessageAdmin(admin.ModelAdmin):
             return JsonResponse({'ok': False, 'error': 'chat_not_found'}, status=404)
 
         try:
-            send_bot_message(chat_id=chat_id, text=text, parse_mode=None)
+            delivery = send_bot_message(chat_id=chat_id, text=text, parse_mode=None)
         except Exception as exc:
             logger.exception('Admin chat send failed for chat_id=%s', chat_id)
             return JsonResponse({'ok': False, 'error': str(exc)[:200]}, status=502)
 
-        message = (
-            GhostTelegramBotMessage.objects.filter(
-                telegram_user_id=chat_id,
-                direction=GhostTelegramBotMessage.Direction.OUT,
-            )
-            .order_by('-created_at')
-            .first()
-        )
+        if delivery['status'] == GhostTelegramOutbox.Status.FAILED:
+            return JsonResponse({'ok': False, 'error': 'Telegram отклонил сообщение. Подробности в очереди отправки.'}, status=502)
+        message = GhostTelegramBotMessage.objects.filter(pk=delivery['log_message_id']).first()
         return JsonResponse({
             'ok': True,
+            'queued': delivery['queued'],
             'message_html': str(format_chat_message_html(message)) if message else '',
         })
 
@@ -1023,3 +1041,19 @@ class GhostTelegramBotMessageAdmin(admin.ModelAdmin):
         if len(preview) > 120:
             preview = preview[:117] + '…'
         return preview
+
+
+@admin.register(GhostTelegramOutbox)
+class GhostTelegramOutboxAdmin(admin.ModelAdmin):
+    list_display = ('id', 'created_at', 'chat_id', 'method', 'status', 'attempts',
+                    'next_attempt_at', 'sent_at', 'last_error')
+    list_filter = ('status', 'method', 'created_at')
+    search_fields = ('=chat_id', 'idempotency_key', 'last_error')
+    readonly_fields = tuple(field.name for field in GhostTelegramOutbox._meta.fields)
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

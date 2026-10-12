@@ -1,0 +1,16 @@
+[Unit]
+Description=Ghost Note Telegram bot (long polling)
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/usr/share/django-projects/welcome
+Environment=DJANGO_SETTINGS_MODULE=welcome.settings
+ExecStart=/usr/share/django-projects/welcome/venv/bin/python manage.py ghost_telegram_poll
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

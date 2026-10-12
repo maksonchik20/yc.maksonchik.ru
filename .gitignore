@@ -7,3 +7,17 @@ env.py
 sender.py
 audio.log
 gunicorn.log
+
+# Local credentials, contact exports and developer artifacts.
+.DS_Store
+*.code-workspace
+*.session
+*.session-*
+*.log
+/node_modules
+/outputs/
+/state.json
+/scripts/*qr*.png
+/scripts/*.csv
+/scripts/*.json
+/scripts/*.txt

@@ -1,0 +1,11 @@
+[Unit]
+Description=Retry Ghost Note Telegram delivery
+
+[Timer]
+OnBootSec=15s
+OnUnitInactiveSec=5s
+AccuracySec=1s
+Unit=ghost-outbox.service
+
+[Install]
+WantedBy=timers.target

@@ -1,10 +1,12 @@
 import json
 import logging
+from requests import RequestException
 
 from django.conf import settings
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
@@ -111,6 +113,8 @@ def buy(request):
 
     notify_admin_purchase_attempt(order, note='Покупатель перенаправлен на оплату')
 
+    GhostPurchaseOrder.objects.filter(pk=order.pk, checkout_at__isnull=True).update(checkout_at=timezone.now())
+
     return redirect(confirmation_url)
 
 
@@ -184,6 +188,16 @@ def yookassa_webhook(request):
     except (UnicodeDecodeError, json.JSONDecodeError):
         return HttpResponse(status=400)
 
+    if not isinstance(payload, dict):
+        return HttpResponse(status=400)
+    payment_obj = payload.get('object') or {}
+    if not isinstance(payment_obj, dict) or not isinstance(payment_obj.get('metadata') or {}, dict):
+        return HttpResponse(status=400)
+    if payload.get('event') in ('payment.succeeded', 'payment.canceled'):
+        payment_id = payment_obj.get('id')
+        if not isinstance(payment_id, str) or not payment_id.strip():
+            return HttpResponse(status=400)
+
     forwarded_status = forward_who_update_payment(payload)
     if forwarded_status is not None:
         return HttpResponse(status=forwarded_status)
@@ -200,8 +214,9 @@ def yookassa_webhook(request):
             fulfill_purchase_order(order, payment_id=payment_id, verify_remote=True)
         except GhostPurchaseOrder.DoesNotExist:
             logger.error('Order not found for webhook: %s', order_public_id)
-        except YooKassaError:
+        except (YooKassaError, RequestException):
             logger.exception('Webhook payment verify failed for %s', payment_id)
+            return HttpResponse(status=503)
     elif event == 'payment.canceled' and order_public_id:
         updated = GhostPurchaseOrder.objects.filter(
             public_id=order_public_id,

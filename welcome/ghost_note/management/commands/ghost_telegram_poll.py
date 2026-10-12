@@ -9,7 +9,7 @@ from ghost_note.telegram_notify import delete_telegram_webhook, get_telegram_upd
 
 logger = logging.getLogger(__name__)
 
-POLL_TIMEOUT = 25
+POLL_TIMEOUT = 15
 ERROR_SLEEP = 5
 
 
@@ -21,7 +21,7 @@ class Command(BaseCommand):
             self.stderr.write('GHOST_NOTE_BOT_TOKEN не задан')
             return
 
-        delete_telegram_webhook(drop_pending_updates=True)
+        delete_telegram_webhook(drop_pending_updates=False)
         self.stdout.write(self.style.SUCCESS('Webhook отключён, запуск long polling…'))
 
         offset = 0

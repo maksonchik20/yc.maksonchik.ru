@@ -71,13 +71,14 @@
   }
 
   function applyTestSchedule(select) {
-    if (!select || select.name !== 'token_type') {
+    if (!select || !/(^|-)token_type$/.test(select.name || '')) {
       return;
     }
+    var prefix = select.name.slice(0, -'token_type'.length);
     var now = new Date();
     var end = new Date(now.getTime() + TEST_DURATION_MS);
-    setSplitDateTime('starts_at', now);
-    setSplitDateTime('expires_at', end);
+    setSplitDateTime(prefix + 'starts_at', now);
+    setSplitDateTime(prefix + 'expires_at', end);
   }
 
   window.ghostNoteToggleTokenType = function (select, applySchedule) {

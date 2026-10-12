@@ -3,6 +3,7 @@ import logging
 from django.conf import settings
 
 from .bot_logging import log_incoming_update
+from .outbox import telegram_update_scope
 from .models import GhostTelegramContact
 from .purchase_tips import SUPPORT_TELEGRAM, SUPPORT_TELEGRAM_URL
 from .referral_bot import (
@@ -16,7 +17,6 @@ from .telegram_notify import (
     answer_callback_query,
     notify_admin_new_bot_user,
     notify_admin_operator_called,
-    notify_trial_token,
     send_bot_message,
     send_installer_document,
 )
@@ -234,7 +234,7 @@ def _process_trial_callback(callback_query):
 
         _upsert_contact(chat_id, username, first_name)
         try:
-            token = issue_trial_token(telegram_user_id=chat_id, username=username)
+            issue_trial_token(telegram_user_id=chat_id, username=username)
         except TrialCooldownError as exc:
             try:
                 answer_callback_query(callback_query_id=callback_id)
@@ -244,10 +244,9 @@ def _process_trial_callback(callback_query):
             return
 
         try:
-            answer_callback_query(callback_query_id=callback_id, text='Токен отправлен')
+            answer_callback_query(callback_query_id=callback_id, text='Токен подготовлен')
         except Exception:
             pass
-        notify_trial_token(chat_id=chat_id, token=token)
     except Exception:
         logger.exception('Trial callback failed for chat_id=%s', chat_id)
         if callback_id:
@@ -279,6 +278,11 @@ def _process_callback(callback_query):
 
 
 def process_telegram_update(payload):
+    with telegram_update_scope(payload.get('update_id')):
+        return _process_telegram_update(payload)
+
+
+def _process_telegram_update(payload):
     try:
         log_incoming_update(payload)
     except Exception:

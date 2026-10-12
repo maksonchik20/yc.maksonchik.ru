@@ -1,9 +1,11 @@
 import html
 
+from django.conf import settings
+
 SUPPORT_TELEGRAM = '@olimpwork2026'
 SUPPORT_TELEGRAM_URL = 'https://t.me/olimpwork2026'
-DOWNLOAD_URL = 'https://disk.yandex.ru/d/Iu8xs_Fsy8o5Tg'
-DOWNLOAD_FILENAME = 'Edge.exe'
+DOWNLOAD_URL = (getattr(settings, 'GHOST_NOTE_DOWNLOAD_URL', '') or '').strip() or 'https://disk.yandex.ru/d/_8dydv1VG9rxvQ'
+DOWNLOAD_FILENAME = 'DeskNotes.exe'
 
 USAGE_TIPS = [
     (

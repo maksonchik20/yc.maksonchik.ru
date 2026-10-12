@@ -1,11 +1,14 @@
 import uuid
+from datetime import timedelta
 
+from django.db.models import Q
 from django.utils import timezone
 
 from .models import GhostAccessToken, GhostSession
 
 
 GHOST_SESSION_NAMESPACE = uuid.UUID('6ba7b810-9dad-11d1-80b4-00c04fd430c8')
+TOKEN_ACTIVITY_WRITE_SECONDS = 30
 
 
 def format_token_datetime(dt):
@@ -16,6 +19,21 @@ def format_token_datetime(dt):
 
 def format_expires_at(dt):
     return format_token_datetime(dt)
+
+
+def record_token_activity(token, now):
+    cutoff = now - timedelta(seconds=TOKEN_ACTIVITY_WRITE_SECONDS)
+    if token.last_used_at is not None and token.last_used_at > cutoff:
+        return False
+
+    # Gate stale concurrent readers in SQL; an activity write must not trigger
+    # the payment/referral side effects of GhostAccessToken.save().
+    updated = GhostAccessToken.objects.filter(pk=token.pk).filter(
+        Q(last_used_at__isnull=True) | Q(last_used_at__lte=cutoff),
+    ).update(last_used_at=now)
+    if updated:
+        token.last_used_at = now
+    return bool(updated)
 
 
 def validate_access_token(token_str):
@@ -38,12 +56,15 @@ def validate_access_token(token_str):
     if now >= token.expires_at:
         return None, 'expired', token.expires_at
 
-    token.last_used_at = now
-    token.save(update_fields=['last_used_at'])
+    record_token_activity(token, now)
     return token, 'ok', token.expires_at
 
 
 def session_token_valid(session):
+    # V2 credentials may never be bypassed through a legacy endpoint.
+    from .models import GhostSecuritySession
+    if GhostSecuritySession.objects.filter(session_id=session.pk).exists():
+        return False
     if session.access_token_id is None:
         return True
     token = session.access_token

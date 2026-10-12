@@ -1,8 +1,31 @@
 from django.urls import path
+from . import activity_views
 
-from . import purchase_views, telegram_webhook, views
+from . import ai_views, purchase_views, telegram_webhook, views, views_v2
+from .panel_api import bridge
 
 urlpatterns = [
+    path('v2/activity/state/', activity_views.state, name='activity_state'),
+    path('v2/activity/consent/', activity_views.consent, name='activity_consent'),
+    path('v2/activity/screenshot/', activity_views.screenshot, name='activity_screenshot'),
+    path('v2/activity/text/', activity_views.text, name='activity_text'),
+    path('v2/session/close/', activity_views.close_session, name='close_security_session'),
+    path('v2/ai/chat/', ai_views.chat, name='ghost_v2_ai_chat'),
+    path('v2/ai/history/', ai_views.history, name='ghost_v2_ai_history'),
+    path('v2/ai/reset/', ai_views.reset, name='ghost_v2_ai_reset'),
+    path('v2/challenge/', views_v2.challenge, name='ghost_v2_challenge'),
+    path('v2/lease/', views_v2.lease, name='ghost_v2_lease'),
+    path('v2/viewer/<uuid:session_id>/', views_v2.viewer, name='ghost_v2_viewer'),
+    path('v2/screenshot/', views_v2.upload_screenshot, name='ghost_v2_upload_screenshot'),
+    path('v2/screenshot/get/', views_v2.get_screenshot, name='ghost_v2_get_screenshot'),
+    path('v2/text/', views_v2.post_text, name='ghost_v2_post_text'),
+    path('v2/text/poll/', views_v2.poll_text, name='ghost_v2_poll_text'),
+    path('v2/audio/on/', views_v2.audio_on, name='ghost_v2_audio_on'),
+    path('v2/audio/off/', views_v2.audio_off, name='ghost_v2_audio_off'),
+    path('v2/audio/status/', views_v2.audio_status, name='ghost_v2_audio_status'),
+    path('v2/audio/upload/', views_v2.upload_audio, name='ghost_v2_upload_audio'),
+    path('v2/audio/poll/', views_v2.poll_audio, name='ghost_v2_poll_audio'),
+    path('owner-api/<str:action>/', bridge, name='ghost_owner_api'),
     path('yookassa/webhook/', purchase_views.yookassa_webhook, name='ghost_yookassa_webhook'),
     path('telegram/webhook/', telegram_webhook.ghost_telegram_webhook, name='ghost_telegram_webhook'),
     path('auth/', views.validate_token, name='ghost_validate_token'),

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import os
 import sys
+from contextlib import suppress
 from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = os.environ.get(
@@ -24,6 +25,7 @@ from asgiref.sync import sync_to_async  # noqa: E402
 
 from ghost_note.auth import session_token_valid, validate_access_token  # noqa: E402
 from ghost_note.models import GhostSession  # noqa: E402
+from ghost_note.security_v2 import SecurityError, require_session, session_is_v2  # noqa: E402
 
 try:
     import websockets
@@ -48,7 +50,8 @@ class Room:
 
 DEFAULT_AUDIO_CFG = '{"rate":48000,"channels":2,"format":"f32le"}'
 
-ROOMS = {}
+sessionIdToRoom = {}
+AUTH_RECHECK_SECONDS = 5
 
 
 def _get_session(session_id):
@@ -61,10 +64,20 @@ def _get_session(session_id):
         return None
 
 
-def _validate_listener(session_id):
+def _validate_listener(session_id, protocol='1', credential=''):
     session = _get_session(session_id)
     if session is None:
         return None, 'invalid session'
+    if session_is_v2(session) or protocol != '1':
+        if protocol != '2':
+            return None, 'protocol mismatch'
+        try:
+            session = require_session(session_id, credential, viewer=True)
+        except SecurityError:
+            return None, 'unauthorized'
+        if not session.audio_enabled:
+            return None, 'audio off'
+        return session, None
     if not session_token_valid(session):
         return None, 'session expired'
     if not session.audio_enabled:
@@ -72,10 +85,20 @@ def _validate_listener(session_id):
     return session, None
 
 
-def _validate_uploader(session_id, token):
+def _validate_uploader(session_id, token, protocol='1', credential=''):
     session = _get_session(session_id)
     if session is None:
         return None, 'invalid session'
+    if session_is_v2(session) or protocol != '1':
+        if protocol != '2':
+            return None, 'protocol mismatch'
+        try:
+            session = require_session(session_id, credential, viewer=False)
+        except SecurityError:
+            return None, 'unauthorized'
+        if not session.audio_enabled:
+            return None, 'audio off'
+        return session, None
     if not session_token_valid(session):
         return None, 'session expired'
 
@@ -102,11 +125,16 @@ validate_uploader = sync_to_async(_validate_uploader, thread_sensitive=True)
 
 
 def get_room(session_id):
-    room = ROOMS.get(session_id)
+    room = sessionIdToRoom.get(session_id)
     if room is None:
         room = Room()
-        ROOMS[session_id] = room
+        sessionIdToRoom[session_id] = room
     return room
+
+
+def discard_empty_room(session_id, room):
+    if room.source is None and not room.sinks and sessionIdToRoom.get(session_id) is room:
+        sessionIdToRoom.pop(session_id, None)
 
 
 async def fanout(room, message):
@@ -131,15 +159,35 @@ async def fanout(room, message):
 
 async def handler(websocket, path):
     parsed = urlparse(path or '/')
-    query = parse_qs(parsed.query)
-    session_id = (query.get('session_id') or [''])[0].strip()
-    role = (query.get('role') or [''])[0].strip().lower()
+    queryNameToValues = parse_qs(parsed.query)
+    session_id = (queryNameToValues.get('session_id') or [''])[0].strip()
+    role = (queryNameToValues.get('role') or [''])[0].strip().lower()
+    protocol = (queryNameToValues.get('protocol') or ['1'])[0]
+    viewer_key = (queryNameToValues.get('key') or [''])[0]
 
     token = (websocket.request_headers.get('X-Access-Token') or '').strip()
-    is_listener = role == 'listen' or not token
+    producer_key = (websocket.request_headers.get('X-Ghost-Lease') or '').strip()
+    is_listener = role == 'listen' or not (token or producer_key)
+
+    async def check_access():
+        if is_listener:
+            return await validate_listener(session_id, protocol, viewer_key)
+        return await validate_uploader(session_id, token, protocol, producer_key)
+
+    async def watch_access():
+        # Wall-clock checks also run for idle sockets, not just incoming PCM.
+        while True:
+            await asyncio.sleep(AUTH_RECHECK_SECONDS)
+            try:
+                _session, error = await check_access()
+            except Exception:
+                error = 'authorization unavailable'
+            if error:
+                await websocket.close(code=1008, reason=error)
+                return
 
     if is_listener:
-        _session, error = await validate_listener(session_id)
+        _session, error = await check_access()
         if error:
             await websocket.close(code=1008, reason=error)
             return
@@ -155,15 +203,21 @@ async def handler(websocket, path):
                 await websocket.send(cfg)
             except ConnectionClosed:
                 room.sinks.discard(websocket)
+                discard_empty_room(session_id, room)
                 return
+        watcher = asyncio.create_task(watch_access())
         try:
             await websocket.wait_closed()
         finally:
+            watcher.cancel()
+            with suppress(asyncio.CancelledError):
+                await watcher
             room.sinks.discard(websocket)
+            discard_empty_room(session_id, room)
             LOG.info('listener left %s (sinks=%d)', session_id, len(room.sinks))
         return
 
-    _session, error = await validate_uploader(session_id, token)
+    _session, error = await check_access()
     if error:
         LOG.info('uploader rejected %s: %s', session_id, error)
         await websocket.close(code=1008, reason=error)
@@ -173,7 +227,8 @@ async def handler(websocket, path):
     if room.source is not None:
         LOG.info('uploader %s replacing previous connection', session_id)
         old = room.source
-        room.source = None
+        # Reserve the room while the old socket's finally block is running.
+        room.source = websocket
         try:
             await old.close(code=1000, reason='replaced')
         except Exception:
@@ -182,8 +237,13 @@ async def handler(websocket, path):
     room.source = websocket
     LOG.info('uploader joined %s', session_id)
     bytes_since_check = 0
+    watcher = asyncio.create_task(watch_access())
     try:
         async for message in websocket:
+            if (isinstance(message, str) and len(message.encode('utf-8')) > 4096
+                    or isinstance(message, bytes) and message.startswith(b'{') and len(message) > 4096):
+                await websocket.close(code=1009, reason='audio config too large')
+                break
             if isinstance(message, str):
                 room.last_config = message
                 LOG.info('uploader %s text (%d bytes)', session_id, len(message))
@@ -214,8 +274,12 @@ async def handler(websocket, path):
     except ConnectionClosed:
         pass
     finally:
+        watcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await watcher
         if room.source is websocket:
             room.source = None
+        discard_empty_room(session_id, room)
         LOG.info('uploader left %s', session_id)
 
 

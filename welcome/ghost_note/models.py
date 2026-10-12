@@ -175,6 +175,18 @@ class GhostAccessToken(models.Model):
     is_active = models.BooleanField(default=True, verbose_name='Активен')
     allow_local = models.BooleanField(default=True, verbose_name='Локальный доступ')
     allow_remote = models.BooleanField(default=True, verbose_name='Удалённый доступ')
+    allow_ai = models.BooleanField(default=False, verbose_name='Доступ с нейросетью',
+        help_text='Включается вручную. По умолчанию выключен, в том числе для тестовых токенов.')
+    max_devices = models.PositiveSmallIntegerField(default=2, verbose_name='Максимум устройств',
+        help_text='0 — без ограничений. Применяется к защищённым версиям; старые .exe продолжают работать.')
+    max_concurrent_sessions = models.PositiveSmallIntegerField(default=1, verbose_name='Одновременных сессий',
+        help_text='0 — без ограничений. Действующие защищённые сессии учитываются до окончания аренды (до 10 минут).')
+    activity_recording_enabled = models.BooleanField(default=True, verbose_name='Разрешить архив активности',
+        help_text='Новая программа предложит согласие. Без него локальные сообщения и снимки не передаются.')
+    screenshot_retention_days = models.PositiveSmallIntegerField(default=7, verbose_name='Хранить снимки, дней')
+    last_ai_used_at = models.DateTimeField(null=True, blank=True, editable=False, verbose_name='Последний AI-запрос')
+    ai_daily_request_limit = models.PositiveIntegerField(default=0, verbose_name='AI-запросов в сутки',
+        help_text='0 — без суточного лимита. Пауза 30 секунд обязательна для всех устройств токена.')
     created_at = models.DateTimeField(auto_now_add=True)
     last_used_at = models.DateTimeField(null=True, blank=True, verbose_name='Последнее использование')
 
@@ -317,6 +329,7 @@ class GhostPurchaseOrder(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    checkout_at = models.DateTimeField(null=True, blank=True, db_index=True)
     telegram_notified_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -358,6 +371,13 @@ class GhostPurchaseOrder(models.Model):
 
     def __str__(self):
         return f'{self.customer_name} — {self.get_access_type_display()} ({self.get_status_display()})'
+
+
+class GhostPanelTokenRequest(models.Model):
+    request_id = models.UUIDField(primary_key=True)
+    data_hash = models.CharField(max_length=64)
+    token = models.ForeignKey(GhostAccessToken, null=True, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
 
 
 class GhostTelegramContact(models.Model):
@@ -430,6 +450,41 @@ class GhostTelegramBotMessage(models.Model):
         arrow = '→' if self.direction == self.Direction.OUT else '←'
         preview = (self.text or '')[:60]
         return f'{arrow} {who}: {preview}'
+
+
+class GhostTelegramOutbox(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Ожидает отправки'
+        SENT = 'sent', 'Отправлено'
+        FAILED = 'failed', 'Не доставлено'
+
+    chat_id = models.BigIntegerField(verbose_name='Telegram chat_id')
+    method = models.CharField(max_length=32, verbose_name='Метод')
+    payload = models.JSONField(verbose_name='Содержимое')
+    idempotency_key = models.CharField(max_length=160, null=True, blank=True, unique=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING,
+                              verbose_name='Статус')
+    attempts = models.PositiveIntegerField(default=0, verbose_name='Попыток')
+    next_attempt_at = models.DateTimeField(default=timezone.now, verbose_name='Следующая попытка')
+    lease_token = models.CharField(max_length=32, blank=True, default='')
+    last_error = models.TextField(blank=True, default='', verbose_name='Последняя ошибка')
+    next_part = models.PositiveIntegerField(default=0, verbose_name='Отправлено частей')
+    completion = models.JSONField(default=dict, blank=True)
+    is_alert = models.BooleanField(default=False)
+    alerted_at = models.DateTimeField(null=True, blank=True)
+    log_message = models.ForeignKey(GhostTelegramBotMessage, null=True, blank=True,
+                                    on_delete=models.SET_NULL, verbose_name='Сообщение в чате')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='Создано')
+    sent_at = models.DateTimeField(null=True, blank=True, verbose_name='Отправлено')
+
+    class Meta:
+        verbose_name = 'Отправка Ghost Note'
+        verbose_name_plural = 'Очередь отправки Ghost Note'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['status', 'next_attempt_at'], name='ghost_outbox_due'),
+            models.Index(fields=['chat_id', 'status', 'id'], name='ghost_outbox_chat'),
+        ]
 
 
 class GhostReferralPayout(GhostUser):
@@ -508,9 +563,119 @@ class GhostTextMessage(models.Model):
     session = models.ForeignKey(GhostSession, on_delete=models.CASCADE, related_name='text_messages')
     text = models.TextField()
     delivered = models.BooleanField(default=False)
+    source = models.CharField(max_length=16, default='viewer', choices=[('viewer', 'Viewer'), ('local', 'Локальный viewer')])
+    event_id = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['created_at']
+        constraints = [models.UniqueConstraint(fields=['session', 'event_id'], name='ghost_text_event_unique')]
         verbose_name = 'Ghost Note text'
         verbose_name_plural = 'Ghost Note texts'
+
+
+class GhostLeaseChallenge(models.Model):
+    """Single-use proof challenge. Never stores the license or the raw challenge."""
+
+    challenge_hash = models.CharField(max_length=64, unique=True)
+    access_token = models.ForeignKey(GhostAccessToken, on_delete=models.CASCADE)
+    device_key_hash = models.CharField(max_length=64)
+    expires_at = models.DateTimeField(db_index=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class GhostSecuritySession(models.Model):
+    """V2 credentials are isolated from the stable legacy session of a license."""
+
+    session = models.OneToOneField(
+        GhostSession, related_name='security_v2', on_delete=models.CASCADE,
+    )
+    # Keep the security marker after token deletion: legacy APIs must still deny it.
+    access_token = models.ForeignKey(
+        GhostAccessToken, null=True, on_delete=models.SET_NULL, related_name='security_sessions',
+    )
+    device_key_hash = models.CharField(max_length=64)
+    producer_secret = models.CharField(max_length=64)
+    viewer_secret = models.CharField(max_length=64)
+    lease_expires_at = models.DateTimeField(db_index=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    last_seen_at = models.DateTimeField(default=timezone.now, null=True, blank=True, verbose_name='Последняя активность')
+    mode = models.CharField(max_length=8, blank=True, choices=[('local', 'Локальный'), ('remote', 'Удалённый'), ('ai', 'AI')])
+    recording_consent_at = models.DateTimeField(null=True, blank=True, verbose_name='Согласие на архив')
+    last_archive_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
+class GhostAIThread(models.Model):
+    """Private persistent conversation for one license and one proven device."""
+    access_token = models.ForeignKey(GhostAccessToken, on_delete=models.CASCADE, related_name='ai_threads')
+    device_key_hash = models.CharField(max_length=64)
+    conversation_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    busy_request = models.UUIDField(null=True, blank=True)
+    busy_since = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['access_token', 'device_key_hash'], name='ghost_ai_token_device_unique')]
+
+
+class GhostAIRequest(models.Model):
+    class Status(models.TextChoices):
+        PENDING = 'pending', 'Выполняется'
+        SUCCEEDED = 'succeeded', 'Готово'
+        FAILED = 'failed', 'Ошибка'
+
+    thread = models.ForeignKey(GhostAIThread, on_delete=models.CASCADE, related_name='requests')
+    request_id = models.UUIDField()
+    conversation_id = models.UUIDField()
+    image_hash = models.CharField(max_length=64)
+    image = models.BinaryField()
+    answer = models.TextField(blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
+    error_code = models.CharField(max_length=48, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['thread', 'request_id'], name='ghost_ai_request_unique')]
+        indexes = [models.Index(fields=['thread', 'conversation_id', 'created_at'], name='ghost_ai_history_idx')]
+
+
+class GhostAIResetRequest(models.Model):
+    thread = models.ForeignKey(GhostAIThread, on_delete=models.CASCADE, related_name='resets')
+    request_id = models.UUIDField()
+    conversation_id = models.UUIDField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['thread', 'request_id'], name='ghost_ai_reset_unique')]
+
+
+class GhostTokenDevice(models.Model):
+    access_token = models.ForeignKey(GhostAccessToken, on_delete=models.CASCADE, related_name='devices')
+    device_key_hash = models.CharField(max_length=64, verbose_name='Ключ устройства')
+    label = models.CharField(max_length=100, blank=True, verbose_name='Название')
+    blocked = models.BooleanField(default=False, verbose_name='Заблокировано')
+    first_seen_at = models.DateTimeField(default=timezone.now, verbose_name='Первое подключение')
+    last_seen_at = models.DateTimeField(default=timezone.now, verbose_name='Последняя активность')
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=['access_token', 'device_key_hash'], name='ghost_token_device_unique')]
+        verbose_name = 'Устройство Ghost Note'
+        verbose_name_plural = 'Устройства Ghost Note'
+
+    def __str__(self):
+        return self.label or self.device_key_hash[:12]
+
+
+class GhostTokenScreenshot(models.Model):
+    access_token = models.ForeignKey(GhostAccessToken, on_delete=models.CASCADE, related_name='archived_screenshots')
+    session = models.ForeignKey(GhostSecuritySession, null=True, on_delete=models.SET_NULL)
+    image = models.BinaryField()
+    created_at = models.DateTimeField(default=timezone.now, db_index=True, verbose_name='Дата снимка')
+
+    class Meta:
+        ordering = ['-created_at', '-pk']
+        verbose_name = 'Снимок Ghost Note'
+        verbose_name_plural = 'Снимки Ghost Note'

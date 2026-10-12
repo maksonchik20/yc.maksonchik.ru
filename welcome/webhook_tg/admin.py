@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.db.models import Q
-from .models import Message, UserTg, AdminChatFilter, WhoUpdateBotEvent
+from .models import Message, UserTg, AdminChatFilter, WhoUpdateBotEvent, WhoUpdateActivityBatch
 
 HIDDEN_USERNAMES = {"@tamataeva86", }
 
@@ -51,6 +51,26 @@ class WhoUpdateBotEventAdmin(admin.ModelAdmin):
 
 
 admin.site.register(UserTg)
+
+
+@admin.register(WhoUpdateActivityBatch)
+class WhoUpdateActivityBatchAdmin(admin.ModelAdmin):
+    list_display = ("received_at", "last_event_at", "source", "new_archived_messages", "last_message_pk")
+    list_filter = ("source", "received_at")
+    ordering = ("-received_at",)
+    readonly_fields = (
+        "batch_key", "source", "new_archived_messages", "first_message_pk",
+        "last_message_pk", "last_event_at", "received_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 admin.site.site_header = "WhoUpdateBot Admin"
 admin.site.site_title = "WhoUpdateBot"

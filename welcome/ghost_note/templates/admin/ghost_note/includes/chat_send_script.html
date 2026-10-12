@@ -104,7 +104,7 @@
           scrollMessagesToBottom();
         }
         textarea.value = '';
-        setStatus('Сообщение отправлено.', false);
+        setStatus(data.queued ? 'Сообщение сохранено и ожидает отправки. Статус — в очереди отправки.' : 'Сообщение отправлено.', false);
       })
       .catch(function (error) {
         setStatus(error.message || 'Не удалось отправить сообщение.', true);

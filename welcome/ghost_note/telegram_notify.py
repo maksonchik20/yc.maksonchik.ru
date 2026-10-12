@@ -1,12 +1,15 @@
 import html
 import logging
 import re
+import threading
+import time
 
 import requests
+from requests.adapters import HTTPAdapter
 from django.conf import settings
 from django.utils import timezone
 
-from .bot_logging import log_outgoing_message
+from .outbox import TelegramAPIError, enqueue_and_deliver, safe_error
 from .models import GhostPurchaseOrder, GhostTelegramContact
 from .purchase_tips import DOWNLOAD_FILENAME, SUPPORT_TELEGRAM, SUPPORT_TELEGRAM_URL, post_purchase_telegram_html
 from .referrals import calculate_commission
@@ -15,11 +18,36 @@ logger = logging.getLogger(__name__)
 
 TELEGRAM_USERNAME_RE = re.compile(r'^[a-zA-Z][a-zA-Z0-9_]{4,31}$')
 
-# С Yandex Cloud api.telegram.org недоступен — только проверенный IP.
+# Как в WhoUpdate: основной Bot API и два резервных адреса.
 TELEGRAM_API_ENDPOINTS = (
-    {'base': 'https://149.154.167.220', 'host': 'api.telegram.org', 'verify': False},
+    {'base': 'https://api.telegram.org', 'host': None, 'verify': True, 'connect_timeout': 2},
+    {'base': 'https://149.154.167.220', 'host': 'api.telegram.org', 'verify': False, 'connect_timeout': 0.75},
+    {'base': 'https://149.154.167.99', 'host': 'api.telegram.org', 'verify': False, 'connect_timeout': 0.75},
 )
 TELEGRAM_API_TIMEOUT = 8
+TELEGRAM_CONNECT_TIMEOUT = 2
+TELEGRAM_CIRCUIT_COOLDOWN = 30
+
+TELEGRAM_SESSION = requests.Session()
+TELEGRAM_SESSION.mount('https://', HTTPAdapter(pool_connections=10, pool_maxsize=20))
+
+_endpointBaseToRetryAt = {}
+_endpoint_failures_lock = threading.Lock()
+
+
+def _endpoint_is_available(base, now):
+    with _endpoint_failures_lock:
+        return _endpointBaseToRetryAt.get(base, 0) <= now
+
+
+def _mark_endpoint_failed(base):
+    with _endpoint_failures_lock:
+        _endpointBaseToRetryAt[base] = time.monotonic() + TELEGRAM_CIRCUIT_COOLDOWN
+
+
+def _mark_endpoint_healthy(base):
+    with _endpoint_failures_lock:
+        _endpointBaseToRetryAt.pop(base, None)
 
 
 def is_ghost_bot_configured():
@@ -110,16 +138,16 @@ def notify_referrer_purchase(order):
         send_bot_message(
             chat_id=chat_id,
             text=format_referrer_purchase_message(order, commission_amount=commission_amount),
+            idempotency_key='referrer-order:{}'.format(order.pk),
+            completion={'referrer_order': order.pk},
         )
     except Exception as exc:
         logger.exception('Referrer notify failed for order %s', order.public_id)
-        order.referrer_notify_error = str(exc)[:500]
+        order.referrer_notify_error = safe_error(exc)[:500]
         order.save(update_fields=['referrer_notify_error'])
         return False
 
-    order.referrer_notified_at = timezone.now()
-    order.referrer_notify_error = ''
-    order.save(update_fields=['referrer_notified_at', 'referrer_notify_error'])
+    # The outbox records notified_at only after Telegram confirms delivery.
     return True
 
 
@@ -288,7 +316,7 @@ def notify_admin_form_attempt(*, customer_name='', customer_telegram='', custome
     )
 
 
-def send_installer_document(*, chat_id):
+def send_installer_document(*, chat_id, idempotency_key=None):
     installer_file_id = getattr(settings, 'GHOST_NOTE_INSTALLER_FILE_ID', '')
     if not installer_file_id:
         return
@@ -296,13 +324,15 @@ def send_installer_document(*, chat_id):
         chat_id=chat_id,
         file_id=installer_file_id,
         caption=f'📥 {DOWNLOAD_FILENAME} — программа Ghost Note',
+        idempotency_key=idempotency_key,
     )
 
 
 def notify_trial_token(*, chat_id, token):
     from .trial import trial_issued_text
 
-    send_bot_message(chat_id=chat_id, text=trial_issued_text(token))
+    return send_bot_message(chat_id=chat_id, text=trial_issued_text(token),
+                            idempotency_key='trial-token:{}'.format(token.pk))
 
 
 def format_purchase_message(order, token_value):
@@ -323,7 +353,7 @@ def format_purchase_message(order, token_value):
     return '\n'.join(lines)
 
 
-def _call_telegram_api(method, payload, timeout=None):
+def _call_telegram_api(method, parameterToValue, timeout=None):
     token = getattr(settings, 'GHOST_NOTE_BOT_TOKEN', '')
     if not token:
         raise RuntimeError('GHOST_NOTE_BOT_TOKEN не задан')
@@ -333,34 +363,52 @@ def _call_telegram_api(method, payload, timeout=None):
 
     endpoints = getattr(settings, 'TELEGRAM_API_ENDPOINTS', TELEGRAM_API_ENDPOINTS)
     last_error = None
-    for endpoint in endpoints:
-        url = f"{endpoint['base'].rstrip('/')}/bot{token}/{method}"
-        headers = {}
-        host = endpoint.get('host')
+    now = time.monotonic()
+    for endpointKeyToValue in endpoints:
+        base = endpointKeyToValue['base']
+        if not _endpoint_is_available(base, now):
+            continue
+        url = f"{base.rstrip('/')}/bot{token}/{method}"
+        headerToValue = {}
+        host = endpointKeyToValue.get('host')
         if host:
-            headers['Host'] = host
+            headerToValue['Host'] = host
         try:
-            response = requests.post(
+            response = TELEGRAM_SESSION.post(
                 url,
-                json=payload,
-                headers=headers,
-                timeout=timeout,
-                verify=endpoint.get('verify', True),
+                json=parameterToValue,
+                headers=headerToValue or None,
+                timeout=(endpointKeyToValue.get('connect_timeout', TELEGRAM_CONNECT_TIMEOUT), timeout),
+                verify=endpointKeyToValue.get('verify', True),
             )
-            data = response.json()
-            if data.get('ok'):
-                return data
-            last_error = RuntimeError(data.get('description', response.text))
-        except (requests.RequestException, ValueError) as exc:
-            last_error = exc
-            logger.warning('Telegram API %s via %s failed: %s', method, endpoint['base'], exc)
+        except requests.RequestException as exc:
+            _mark_endpoint_failed(base)
+            last_error = RuntimeError(safe_error(exc))
+            logger.warning('Telegram API %s via %s failed: %s', method, base, last_error)
+            continue
+
+        _mark_endpoint_healthy(base)
+        try:
+            responseKeyToValue = response.json()
+        except ValueError:
+            raise RuntimeError('Telegram API returned invalid JSON (HTTP {})'.format(response.status_code)) from None
+        if responseKeyToValue.get('ok'):
+            return responseKeyToValue
+        # A Telegram response (403, 429, etc.) is not a failed route. Let the
+        # durable outbox apply permanent-error handling or retry_after once.
+        raise TelegramAPIError(
+            responseKeyToValue.get('description', 'Telegram API error'),
+            code=responseKeyToValue.get('error_code', response.status_code),
+            retry_after=(responseKeyToValue.get('parameters') or {}).get('retry_after', 0),
+        )
 
     if last_error:
         raise last_error
-    raise RuntimeError('Telegram API недоступен')
+    raise RuntimeError('Telegram API endpoints temporarily disabled by circuit breaker')
 
 
-def send_bot_message(*, chat_id, text, timeout=10, reply_markup=None, parse_mode='HTML'):
+def send_bot_message(*, chat_id, text, timeout=10, reply_markup=None, parse_mode='HTML',
+                     idempotency_key=None, completion=None):
     if not chat_id:
         raise ValueError('chat_id не указан')
 
@@ -374,12 +422,8 @@ def send_bot_message(*, chat_id, text, timeout=10, reply_markup=None, parse_mode
     if reply_markup:
         payload['reply_markup'] = reply_markup
 
-    result = _call_telegram_api('sendMessage', payload, timeout=timeout)
-    try:
-        log_outgoing_message(chat_id=chat_id, text=text)
-    except Exception:
-        logger.exception('Failed to log outgoing bot message for chat_id=%s', chat_id)
-    return result
+    return enqueue_and_deliver(chat_id=chat_id, method='sendMessage', payload=payload,
+                               idempotency_key=idempotency_key, completion=completion)
 
 
 def answer_callback_query(*, callback_query_id, text='', show_alert=False, timeout=10):
@@ -416,7 +460,7 @@ def get_telegram_updates(*, offset=0, poll_timeout=25, timeout=None):
     )
 
 
-def send_bot_document(*, chat_id, file_id, caption='', timeout=30):
+def send_bot_document(*, chat_id, file_id, caption='', timeout=30, idempotency_key=None):
     if not chat_id:
         raise ValueError('chat_id не указан')
     if not file_id:
@@ -430,18 +474,8 @@ def send_bot_document(*, chat_id, file_id, caption='', timeout=30):
         payload['caption'] = caption[:1024]
         payload['parse_mode'] = 'HTML'
 
-    from .models import GhostTelegramBotMessage
-
-    result = _call_telegram_api('sendDocument', payload, timeout=timeout)
-    try:
-        log_outgoing_message(
-            chat_id=chat_id,
-            text=caption or '[document]',
-            message_kind=GhostTelegramBotMessage.MessageKind.DOCUMENT,
-        )
-    except Exception:
-        logger.exception('Failed to log outgoing bot document for chat_id=%s', chat_id)
-    return result
+    return enqueue_and_deliver(chat_id=chat_id, method='sendDocument', payload=payload,
+                               idempotency_key=idempotency_key)
 
 
 def notify_purchase_token(order, *, token_value=None):
@@ -477,15 +511,16 @@ def notify_purchase_token(order, *, token_value=None):
         send_bot_message(
             chat_id=chat_id,
             text=format_purchase_message(order, token_value),
+            idempotency_key='purchase-order:{}'.format(order.pk),
+            completion={'purchase_order': order.pk},
         )
-        send_installer_document(chat_id=chat_id)
+        send_installer_document(chat_id=chat_id,
+                                idempotency_key='purchase-installer:{}'.format(order.pk))
     except (requests.RequestException, RuntimeError, ValueError) as exc:
         logger.exception('Telegram notify failed for order %s', order.public_id)
-        order.telegram_notify_error = str(exc)[:500]
+        order.telegram_notify_error = safe_error(exc)[:500]
         order.save(update_fields=['telegram_notify_error'])
         return False
 
-    order.telegram_notified_at = timezone.now()
-    order.telegram_notify_error = ''
-    order.save(update_fields=['telegram_notified_at', 'telegram_notify_error'])
+    # The outbox records notified_at only after Telegram confirms delivery.
     return True

@@ -99,6 +99,7 @@ TIME_INPUT_FORMATS = ['%H:%M:%S', '%H:%M']
 
 STATIC_URL = '/static/'
 STATIC_ROOT = '/usr/share/django-projects/welcome/static/'
+STATICFILES_STORAGE = 'ghost_note.staticfiles.AdminVersionedStaticFilesStorage'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

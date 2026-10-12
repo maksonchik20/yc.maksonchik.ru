@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Панель просмотра сессии Ghost Note — служебная страница удалённого мониторинга для авторизованного доступа.">
+  <title>Ghost Note — просмотр сессии {{ session_id }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 12px 16px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    header h1 { margin: 0; font-size: 1.1rem; font-weight: 600; }
+    header .session { font-size: 0.85rem; color: #94a3b8; word-break: break-all; }
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 16px;
+      gap: 16px;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    .screen-wrap {
+      flex: 1;
+      background: #0f0f1a;
+      border-radius: 8px;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y;
+      display: block;
+      position: relative;
+      min-height: 300px;
+      max-height: 70vh;
+      border: 1px solid #334155;
+    }
+    .screen-wrap.is-zoomed { cursor: grab; }
+    .screen-wrap.is-dragging { cursor: grabbing; }
+    .screen-pan {
+      display: inline-block;
+      min-width: 100%;
+      vertical-align: top;
+    }
+    .screen-pan.is-zoomed {
+      display: block;
+      min-width: 0;
+    }
+    .screen-pan img {
+      display: block;
+      margin: 0 auto;
+      max-width: none;
+      max-height: none;
+      object-fit: contain;
+      user-select: none;
+      -webkit-user-drag: none;
+      pointer-events: none;
+    }
+    .screen-pan.is-zoomed img { margin: 0; }
+    .screen-wrap .placeholder {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #64748b;
+      padding: 16px;
+      text-align: center;
+      pointer-events: none;
+    }
+    .screen-zoom-controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .screen-zoom-controls .zoom-label {
+      min-width: 52px;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #94a3b8;
+    }
+    .screen-zoom-controls button {
+      min-width: 44px;
+      padding: 8px 14px;
+    }
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    textarea {
+      flex: 1;
+      min-width: 200px;
+      min-height: 80px;
+      padding: 10px 12px;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      background: #0f172a;
+      color: #f1f5f9;
+      font-size: 1rem;
+      font-family: inherit;
+      resize: vertical;
+    }
+    button {
+      padding: 10px 20px;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button:hover { background: #2563eb; }
+    button.secondary { background: #475569; }
+    button.secondary:hover { background: #334155; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    button.secondary:disabled { background: #334155; color: #94a3b8; }
+    button.secondary:disabled:hover { background: #334155; }
+    .status { font-size: 0.85rem; color: #94a3b8; }
+    .note { font-size: 0.8rem; color: #64748b; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Ghost Note</h1>
+    <span class="session">Сессия: {{ session_id }}</span>
+  </header>
+  <main>
+    <div class="screen-wrap" id="screenWrap">
+      <div class="screen-pan" id="screenPan">
+        <img id="screen" alt="Экран" style="display:none">
+      </div>
+      <span id="placeholder" class="placeholder">{% if ai_viewer %}Ожидание экрана. В предыдущей версии программы снимок появится после запроса в Qwen (Alt+A).{% else %}Ожидание скриншота…{% endif %}</span>
+    </div>
+    <div class="screen-zoom-controls">
+      <button type="button" id="zoomOut" class="secondary" aria-label="Уменьшить">−</button>
+      <span id="zoomLabel" class="zoom-label">100%</span>
+      <button type="button" id="zoomIn" class="secondary" aria-label="Увеличить">+</button>
+      <button type="button" id="zoomReset" class="secondary">Сброс</button>
+    </div>
+    <div class="controls">
+      <textarea id="text" placeholder="Текст для окна на ПК…"></textarea>
+      <button type="button" id="send">Отправить</button>
+    </div>
+    {% if audio_allowed %}<div class="btn-row">
+      <button type="button" id="audioBtn" class="secondary">Включить звук</button>
+    </div>{% endif %}
+    <p class="note" id="screenStatus">Ожидание демонстрации</p>
+    <p class="status" id="status">Обновление каждые 2 с</p>
+    <p class="note">⌘/Ctrl + +/− — масштаб. При зуме — перетаскивание, трекпад или прокрутка. Ctrl+Enter — отправить.</p>
+  </main>
+  <script>
+    function initScreenZoom(wrap, pan, img) {
+      let userScale = 1;
+      let baseFit = 1;
+      let pinchStartDist = 0;
+      let pinchStartScale = 1;
+      let pinchActive = false;
+      let lastTap = 0;
+      let dragActive = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragScrollLeft = 0;
+      let dragScrollTop = 0;
+      const minUser = 1;
+      const maxUser = 5;
+      const zoomOut = document.getElementById('zoomOut');
+      const zoomIn = document.getElementById('zoomIn');
+      const zoomReset = document.getElementById('zoomReset');
+      const zoomLabel = document.getElementById('zoomLabel');
+
+      function updateLabel() {
+        if (zoomLabel) zoomLabel.textContent = Math.round(userScale * 100) + '%';
+      }
+
+      function isZoomedLayout() {
+        if (!img.naturalWidth) return false;
+        const availW = Math.max(1, wrap.clientWidth);
+        const displayW = img.naturalWidth * baseFit * userScale;
+        return userScale > 1.01 || displayW > availW + 1;
+      }
+
+      function applyLayout() {
+        if (!img.naturalWidth || img.style.display === 'none') return;
+        const availW = Math.max(1, wrap.clientWidth);
+        const availH = Math.max(1, wrap.clientHeight);
+        baseFit = Math.min(1, availW / img.naturalWidth, availH / img.naturalHeight);
+        if (!isFinite(baseFit) || baseFit <= 0) baseFit = 1;
+        img.style.width = (img.naturalWidth * baseFit * userScale) + 'px';
+        img.style.height = 'auto';
+        const zoomed = isZoomedLayout();
+        pan.classList.toggle('is-zoomed', zoomed);
+        wrap.classList.toggle('is-zoomed', zoomed);
+        updateLabel();
+      }
+
+      function setUserScale(next, anchorX, anchorY) {
+        const prevScale = userScale;
+        const prevScrollLeft = wrap.scrollLeft;
+        const prevScrollTop = wrap.scrollTop;
+        userScale = Math.min(maxUser, Math.max(minUser, next));
+        applyLayout();
+        if (userScale <= 1.01) {
+          wrap.scrollLeft = 0;
+          wrap.scrollTop = 0;
+          return;
+        }
+        if (userScale === prevScale) return;
+        if (anchorX == null) {
+          anchorX = prevScrollLeft + wrap.clientWidth / 2;
+          anchorY = prevScrollTop + wrap.clientHeight / 2;
+        }
+        const ratio = userScale / prevScale;
+        wrap.scrollLeft = Math.max(0, anchorX * ratio - (anchorX - prevScrollLeft));
+        wrap.scrollTop = Math.max(0, anchorY * ratio - (anchorY - prevScrollTop));
+      }
+
+      img.addEventListener('load', applyLayout);
+      window.addEventListener('resize', applyLayout);
+
+      if (zoomIn) zoomIn.addEventListener('click', () => setUserScale(userScale + 0.25));
+      if (zoomOut) zoomOut.addEventListener('click', () => setUserScale(userScale - 0.25));
+      if (zoomReset) zoomReset.addEventListener('click', () => setUserScale(1));
+
+      function isEditableTarget(el) {
+        if (!el || !el.tagName) return false;
+        const tag = el.tagName.toLowerCase();
+        return tag === 'textarea' || tag === 'input' || tag === 'select' || el.isContentEditable;
+      }
+
+      window.addEventListener('keydown', (e) => {
+        if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+        if (isEditableTarget(e.target)) return;
+        if (img.style.display === 'none') return;
+
+        const code = e.code;
+        const key = e.key;
+        let handled = false;
+
+        if (code === 'Equal' || code === 'NumpadAdd' || key === '+' || key === '=') {
+          setUserScale(userScale + 0.25);
+          handled = true;
+        } else if (code === 'Minus' || code === 'NumpadSubtract' || key === '-' || key === '_') {
+          setUserScale(userScale - 0.25);
+          handled = true;
+        } else if (code === 'Digit0' || code === 'Numpad0' || key === '0') {
+          setUserScale(1);
+          handled = true;
+        }
+
+        if (handled) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }, true);
+
+      wrap.addEventListener('wheel', (e) => {
+        if (img.style.display === 'none') return;
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        const ax = wrap.scrollLeft + e.clientX - wrap.getBoundingClientRect().left;
+        const ay = wrap.scrollTop + e.clientY - wrap.getBoundingClientRect().top;
+        setUserScale(userScale + (e.deltaY < 0 ? 0.15 : -0.15), ax, ay);
+      }, { passive: false });
+
+      wrap.addEventListener('pointerdown', (e) => {
+        if (img.style.display === 'none' || !isZoomedLayout()) return;
+        if (e.button !== 0) return;
+        dragActive = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        dragScrollLeft = wrap.scrollLeft;
+        dragScrollTop = wrap.scrollTop;
+        wrap.setPointerCapture(e.pointerId);
+        wrap.classList.add('is-dragging');
+      });
+
+      wrap.addEventListener('pointermove', (e) => {
+        if (!dragActive) return;
+        wrap.scrollLeft = dragScrollLeft - (e.clientX - dragStartX);
+        wrap.scrollTop = dragScrollTop - (e.clientY - dragStartY);
+      });
+
+      function endDrag(e) {
+        if (!dragActive) return;
+        dragActive = false;
+        wrap.classList.remove('is-dragging');
+        try { wrap.releasePointerCapture(e.pointerId); } catch (_) {}
+      }
+
+      wrap.addEventListener('pointerup', endDrag);
+      wrap.addEventListener('pointercancel', endDrag);
+
+      wrap.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 2) {
+          pinchActive = true;
+          pinchStartDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+          );
+          pinchStartScale = userScale;
+        }
+      }, { passive: true });
+
+      wrap.addEventListener('touchmove', (e) => {
+        if (e.touches.length !== 2 || !pinchStartDist) return;
+        e.preventDefault();
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const midY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        const ax = wrap.scrollLeft + midX - wrap.getBoundingClientRect().left;
+        const ay = wrap.scrollTop + midY - wrap.getBoundingClientRect().top;
+        setUserScale(pinchStartScale * (dist / pinchStartDist), ax, ay);
+      }, { passive: false });
+
+      wrap.addEventListener('touchend', (e) => {
+        if (e.touches.length >= 2) return;
+        if (pinchActive) {
+          if (e.touches.length === 0) pinchActive = false;
+          return;
+        }
+        if (e.changedTouches.length !== 1) return;
+        const now = Date.now();
+        if (now - lastTap < 320) setUserScale(userScale > 1.05 ? 1 : 2);
+        lastTap = now;
+      });
+
+      return { applyLayout, reset: () => setUserScale(1) };
+    }
+
+    const SESSION_ID = '{{ session_id }}';
+    const VIEWER_KEY = '{{ viewer_key }}';
+    // Credential is bounded to this session; never expose the license or producer key.
+    const screenWrap = document.getElementById('screenWrap');
+    const screenPan = document.getElementById('screenPan');
+    const screenImg = document.getElementById('screen');
+    const screenZoom = initScreenZoom(screenWrap, screenPan, screenImg);
+    const placeholder = document.getElementById('placeholder');
+    const textArea = document.getElementById('text');
+    const sendBtn = document.getElementById('send');
+    const statusEl = document.getElementById('status');
+    const audioBtn = document.getElementById('audioBtn');
+    let screenshotRequestPending = false;
+    let lastScreenETag = '';
+
+    function clearScreenshot() {
+      lastScreenETag = '';
+      screenImg.removeAttribute('src');
+      screenImg.style.display = 'none';
+      placeholder.style.display = '';
+      document.getElementById('screenStatus').textContent = 'Ожидание демонстрации';
+    }
+
+    async function refreshScreenshot() {
+      if (screenshotRequestPending) return;
+      screenshotRequestPending = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      try {
+        const headerToValue = { 'X-Ghost-Viewer': VIEWER_KEY };
+        if (lastScreenETag) headerToValue['If-None-Match'] = lastScreenETag;
+        const r = await fetch('/ghost/v2/screenshot/get/?session_id=' + encodeURIComponent(SESSION_ID), {
+          cache: 'no-store', headers: headerToValue, signal: controller.signal
+        });
+        if (r.status === 304) return;
+        if (r.status === 204) {
+          clearScreenshot();
+          return;
+        }
+        if (r.status === 401 || r.status === 403) clearScreenshot();
+        if (!r.ok) throw new Error(r.status);
+        const capturedAt = r.headers.get('X-Ghost-Screen-Time');
+        const when = capturedAt ? new Date(capturedAt).toLocaleTimeString() : '';
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        let abortImageLoad;
+        try {
+          await new Promise((resolve, reject) => {
+            abortImageLoad = () => reject(new Error('Screenshot load timed out'));
+            controller.signal.addEventListener('abort', abortImageLoad, { once: true });
+            if (controller.signal.aborted) {
+              abortImageLoad();
+              return;
+            }
+            screenImg.onload = resolve;
+            screenImg.onerror = () => reject(new Error('Invalid screenshot'));
+            screenImg.src = url;
+          });
+        } finally {
+          if (abortImageLoad) controller.signal.removeEventListener('abort', abortImageLoad);
+          screenImg.onload = null;
+          screenImg.onerror = null;
+          URL.revokeObjectURL(url);
+        }
+        lastScreenETag = r.headers.get('ETag') || '';
+        document.getElementById('screenStatus').textContent =
+          (r.headers.get('X-Ghost-Screen-Source') === 'ai-request' ? 'Снимок последнего AI-запроса' : 'Экран компьютера') +
+          (when ? ' · ' + when : '');
+        screenZoom.applyLayout();
+        screenImg.style.display = 'block';
+        placeholder.style.display = 'none';
+      } catch (e) {
+        // A failed decode must not make the next poll accept a cached 304.
+        lastScreenETag = '';
+        statusEl.textContent = 'Ошибка загрузки скриншота';
+      } finally {
+        clearTimeout(timeout);
+        screenshotRequestPending = false;
+      }
+    }
+
+    async function sendText() {
+      const text = textArea.value;
+      if (!text.trim()) return;
+      sendBtn.disabled = true;
+      try {
+        const r = await fetch('/ghost/v2/text/', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY },
+          body: JSON.stringify({ session_id: SESSION_ID, text: text })
+        });
+        if (!r.ok) throw new Error(r.status);
+        statusEl.textContent = 'Текст отправлен';
+      } catch (e) {
+        statusEl.textContent = 'Ошибка отправки текста';
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendText);
+    textArea.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.key === 'Enter') sendText();
+    });
+
+    refreshScreenshot();
+    setInterval(refreshScreenshot, 2000);
+
+    {% if audio_allowed %}
+    let audioOn = false;
+    let audioWs = null;
+    let audioCtx = null;
+    let audioNode = null;
+    let audioPush = null;
+    let audioCh = 2;
+    let audioRate = 48000;
+    let audioReady = false;
+    let audioQueue = [];
+    let audioReset = null;
+    let audioInitGen = 0;
+
+    function resampleInterleaved(input, srcRate, dstRate, channels) {
+      if (srcRate === dstRate || !input.length) return input;
+      const inFrames = input.length / channels;
+      const outFrames = Math.max(1, Math.round(inFrames * dstRate / srcRate));
+      const out = new Float32Array(outFrames * channels);
+      for (let i = 0; i < outFrames; i++) {
+        const srcPos = i * srcRate / dstRate;
+        const i0 = Math.min(Math.floor(srcPos), inFrames - 1);
+        const i1 = Math.min(i0 + 1, inFrames - 1);
+        const frac = srcPos - i0;
+        for (let c = 0; c < channels; c++) {
+          const s0 = input[i0 * channels + c];
+          const s1 = input[i1 * channels + c];
+          out[i * channels + c] = s0 + (s1 - s0) * frac;
+        }
+      }
+      return out;
+    }
+
+    function createAudioRing(capacity) {
+      const buf = new Float32Array(capacity);
+      let write = 0;
+      let read = 0;
+      let count = 0;
+      return {
+        reset() { write = read = count = 0; },
+        available() { return count; },
+        push(data) {
+          for (let i = 0; i < data.length; i++) {
+            if (count >= capacity) {
+              read = (read + 1) % capacity;
+              count--;
+            }
+            buf[write] = data[i];
+            write = (write + 1) % capacity;
+            count++;
+          }
+        },
+        readInto(target, samples) {
+          const got = Math.min(samples, count);
+          for (let i = 0; i < got; i++) {
+            target[i] = buf[read];
+            read = (read + 1) % capacity;
+          }
+          count -= got;
+          return got;
+        }
+      };
+    }
+
+    function makeAudioPushWorklet(node, streamRate, ctxRate, channels) {
+      return (ab) => {
+        let f32 = new Float32Array(ab);
+        if (!f32.length) return;
+        if (streamRate !== ctxRate) {
+          f32 = resampleInterleaved(f32, streamRate, ctxRate, channels);
+        }
+        node.port.postMessage(f32);
+      };
+    }
+
+    const AUDIO_WORKLET_CODE = `
+class GhostAudioProcessor extends AudioWorkletProcessor {
+  constructor(options) {
+    super();
+    this.ch = (options.processorOptions && options.processorOptions.channels) || 2;
+    this.capacity = Math.max(8192, Math.floor(sampleRate * this.ch * 8.0));
+    this.buf = new Float32Array(this.capacity);
+    this.w = 0;
+    this.r = 0;
+    this.count = 0;
+    this.primed = false;
+    this.primeNeed = Math.floor(sampleRate * this.ch * 2.0);
+    this.last = new Float32Array(this.ch);
+    this.hasLast = false;
+    this.port.onmessage = (e) => {
+      const data = e.data;
+      if (data && data.cmd === 'stop') {
+        this.count = 0;
+        this.r = 0;
+        this.w = 0;
+        this.primed = false;
+        this.hasLast = false;
+        this.last.fill(0);
+        return;
+      }
+      if (data && data.length) this._push(data);
+    };
+  }
+  _push(data) {
+    for (let i = 0; i < data.length; i++) {
+      if (this.count >= this.capacity) {
+        this.r = (this.r + 1) % this.capacity;
+        this.count--;
+      }
+      this.buf[this.w] = data[i];
+      this.w = (this.w + 1) % this.capacity;
+      this.count++;
+    }
+  }
+  process(inputs, outputs) {
+    const out = outputs[0];
+    if (!out || !out.length) return true;
+    const ch = out.length;
+    const frames = out[0].length;
+    if (!this.primed) {
+      if (this.count < this.primeNeed) {
+        for (let c = 0; c < ch; c++) out[c].fill(0);
+        return true;
+      }
+      this.primed = true;
+    }
+    for (let i = 0; i < frames; i++) {
+      if (this.count >= ch) {
+        for (let c = 0; c < ch; c++) {
+          const v = this.buf[(this.r + c) % this.capacity];
+          out[c][i] = v;
+          this.last[c] = v;
+        }
+        this.hasLast = true;
+        this.r = (this.r + ch) % this.capacity;
+        this.count -= ch;
+      } else if (this.hasLast) {
+        for (let c = 0; c < ch; c++) out[c][i] = this.last[c];
+      } else {
+        for (let c = 0; c < ch; c++) out[c][i] = 0;
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('ghost-audio-processor', GhostAudioProcessor);
+`;
+
+    function sameAudioConfig(rate, channels) {
+      return audioCtx && audioReady &&
+        audioRate === (rate || 48000) && audioCh === (channels || 2);
+    }
+
+    async function initAudioPipeline(rate, channels) {
+      if (!audioOn) return;
+      const initGen = ++audioInitGen;
+      const nextRate = rate || 48000;
+      const nextCh = channels || 2;
+      if (sameAudioConfig(nextRate, nextCh)) return;
+      if (audioCtx) {
+        try { await audioCtx.close(); } catch (e) {}
+        audioCtx = null;
+        audioNode = null;
+        audioPush = null;
+        audioReset = null;
+      }
+      audioRate = nextRate;
+      audioCh = nextCh;
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: audioRate });
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      if (!audioOn || initGen !== audioInitGen) {
+        try { await audioCtx.close(); } catch (e) {}
+        audioCtx = null;
+        return;
+      }
+      const streamRate = audioRate;
+      const ctxRate = audioCtx.sampleRate;
+
+      if (audioCtx.audioWorklet) {
+        const blob = new Blob([AUDIO_WORKLET_CODE], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        try {
+          await audioCtx.audioWorklet.addModule(url);
+          URL.revokeObjectURL(url);
+          audioNode = new AudioWorkletNode(audioCtx, 'ghost-audio-processor', {
+            outputChannelCount: [audioCh],
+            processorOptions: { channels: audioCh },
+          });
+          audioNode.connect(audioCtx.destination);
+          audioPush = makeAudioPushWorklet(audioNode, streamRate, ctxRate, audioCh);
+          audioReset = () => {
+            try { audioNode.port.postMessage({ cmd: 'stop' }); } catch (e) {}
+          };
+          return;
+        } catch (e) {
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      const samplesMs = (ms) => Math.floor(ctxRate * audioCh * ms / 1000);
+      const ring = createAudioRing(samplesMs(8000));
+      audioReset = () => {
+        ring.reset();
+        playPrimed = false;
+        hasLast = false;
+        lastFrame.fill(0);
+      };
+      let playPrimed = false;
+      const primedSamples = () => samplesMs(2000);
+      const lastFrame = new Float32Array(audioCh);
+      let hasLast = false;
+      audioPush = (ab) => {
+        let f32 = new Float32Array(ab);
+        if (!f32.length) return;
+        if (streamRate !== ctxRate) {
+          f32 = resampleInterleaved(f32, streamRate, ctxRate, audioCh);
+        }
+        ring.push(f32);
+      };
+      const bufferSize = 2048;
+      const scratch = new Float32Array(bufferSize * audioCh);
+      audioNode = audioCtx.createScriptProcessor(bufferSize, 0, audioCh);
+      audioNode.onaudioprocess = (e) => {
+        const out = e.outputBuffer;
+        const ch = out.numberOfChannels;
+        const frames = out.length;
+        const need = frames * ch;
+        const outs = [];
+        for (let c = 0; c < ch; c++) outs.push(out.getChannelData(c));
+        if (!playPrimed) {
+          if (ring.available() < primedSamples()) {
+            for (let c = 0; c < ch; c++) outs[c].fill(0);
+            return;
+          }
+          playPrimed = true;
+        }
+        const got = ring.readInto(scratch, need);
+        for (let i = 0; i < frames; i++) {
+          for (let c = 0; c < ch; c++) {
+            const idx = i * ch + c;
+            if (idx < got) {
+              outs[c][i] = scratch[idx];
+              lastFrame[c] = scratch[idx];
+              hasLast = true;
+            } else if (hasLast) {
+              outs[c][i] = lastFrame[c];
+            } else {
+              outs[c][i] = 0;
+            }
+          }
+        }
+      };
+      audioNode.connect(audioCtx.destination);
+    }
+
+    async function stopAudio() {
+      audioOn = false;
+      audioInitGen++;
+      audioReady = false;
+      audioQueue = [];
+      audioPush = null;
+      audioBtn.textContent = 'Включить звук';
+      if (audioReset) {
+        try { audioReset(); } catch (e) {}
+        audioReset = null;
+      }
+      const ws = audioWs;
+      audioWs = null;
+      if (ws) {
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
+        try { ws.close(); } catch (e) {}
+      }
+      const ctx = audioCtx;
+      audioCtx = null;
+      const node = audioNode;
+      audioNode = null;
+      if (node) {
+        try {
+          if (node.port) {
+            try { node.port.postMessage({ cmd: 'stop' }); } catch (e) {}
+            node.port.onmessage = null;
+          }
+          if (node.onaudioprocess) node.onaudioprocess = null;
+          node.disconnect();
+        } catch (e) {}
+      }
+      if (ctx) {
+        try { await ctx.close(); } catch (e) {}
+      }
+    }
+
+    async function startAudio() {
+      const r = await fetch('/ghost/v2/audio/on/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY },
+        body: JSON.stringify({ session_id: SESSION_ID })
+      });
+      if (!r.ok) throw new Error(r.status);
+
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      audioWs = new WebSocket(
+        proto + '//' + location.host + '/ghost/audio/ws/?session_id=' +
+        encodeURIComponent(SESSION_ID) + '&role=listen&protocol=2&key=' + encodeURIComponent(VIEWER_KEY)
+      );
+      audioWs.binaryType = 'arraybuffer';
+      audioOn = true;
+      audioReady = false;
+      audioQueue = [];
+      audioBtn.textContent = 'Выключить звук';
+      statusEl.textContent = 'Ожидание звука с ПК…';
+
+      audioWs.onmessage = async (ev) => {
+        if (!audioOn) return;
+        if (typeof ev.data === 'string') {
+          try {
+            const cfg = JSON.parse(ev.data);
+            if (sameAudioConfig(cfg.rate || 48000, cfg.channels || 2)) {
+              return;
+            }
+            await initAudioPipeline(cfg.rate || 48000, cfg.channels || 2);
+            if (!audioOn) return;
+            audioReady = true;
+            if (audioPush) {
+              for (const buf of audioQueue) audioPush(buf);
+            }
+            audioQueue = [];
+            statusEl.textContent = 'Конфигурация получена, буферизация ~2 с…';
+          } catch (e) {
+            statusEl.textContent = 'Ошибка инициализации звука';
+            await stopAudio();
+          }
+          return;
+        }
+        if (!audioOn) return;
+        if (!audioReady || !audioPush) {
+          await initAudioPipeline(48000, 2);
+          audioReady = true;
+          statusEl.textContent = 'Звук включён';
+        }
+        if (!audioPush) {
+          audioQueue.push(ev.data.slice(0));
+          return;
+        }
+        audioPush(ev.data);
+      };
+
+      audioWs.onopen = () => {
+        statusEl.textContent = 'WebSocket подключён, ожидание ПК…';
+      };
+
+      audioWs.onclose = () => {
+        if (audioOn) {
+          statusEl.textContent = 'Соединение звука разорвано';
+          stopAudio();
+        }
+      };
+
+      audioWs.onerror = () => {
+        statusEl.textContent = 'Ошибка WebSocket';
+      };
+    }
+
+    audioBtn.addEventListener('click', async () => {
+      audioBtn.disabled = true;
+      try {
+        if (audioOn) {
+          const r = await fetch('/ghost/v2/audio/off/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Ghost-Viewer': VIEWER_KEY },
+            body: JSON.stringify({ session_id: SESSION_ID })
+          });
+          if (!r.ok) throw new Error(r.status);
+          await stopAudio();
+          statusEl.textContent = 'Звук выключен';
+        } else {
+          await startAudio();
+        }
+      } catch (e) {
+        statusEl.textContent = 'Ошибка управления звуком';
+        await stopAudio();
+      } finally {
+        audioBtn.disabled = false;
+      }
+    });
+    {% endif %}
+  </script>
+</body>
+</html>

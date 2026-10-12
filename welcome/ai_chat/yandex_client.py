@@ -1,14 +1,25 @@
 import base64
 import io
+import threading
 
-import openai
 from env import YANDEX_CLOUD_API_KEY, YANDEX_CLOUD_FOLDER, YANDEX_CLOUD_MODEL
 
-client = openai.OpenAI(
-    api_key=YANDEX_CLOUD_API_KEY,
-    base_url='https://ai.api.cloud.yandex.net/v1',
-    project=YANDEX_CLOUD_FOLDER,
-)
+client = None
+_client_lock = threading.Lock()
+
+
+def _get_client():
+    global client
+    if client is None:
+        with _client_lock:
+            if client is None:
+                import openai
+                client = openai.OpenAI(
+                    api_key=YANDEX_CLOUD_API_KEY,
+                    base_url='https://ai.api.cloud.yandex.net/v1',
+                    project=YANDEX_CLOUD_FOLDER,
+                )
+    return client
 
 DIRECT_API_MIME_TYPES = {
     'image/jpeg',
@@ -133,5 +144,5 @@ def create_response(
     if reasoning_effort is not None:
         request_kwargs['reasoning'] = {'effort': reasoning_effort}
 
-    response = client.responses.create(**request_kwargs)
+    response = _get_client().responses.create(**request_kwargs)
     return extract_response_text(response), response.id
