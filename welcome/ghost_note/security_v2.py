@@ -165,7 +165,7 @@ def challenge_response(fieldToValue):
     token_value = token_text(fieldToValue)
     _public_key, device_hash = device_key(fieldToValue)
     try:
-        token = GhostAccessToken.objects.get(token=token_value)
+        token = GhostAccessToken.objects.get(token__iexact=token_value)
     except GhostAccessToken.DoesNotExist:
         raise SecurityError('invalid')
     now = timezone.now()
@@ -223,7 +223,7 @@ def lease_response(fieldToValue):
                             request_payload(challenge, nonce, token_value, device_hash, session_id, license_version))
     with transaction.atomic():
         try:
-            token = GhostAccessToken.objects.select_for_update().get(token=token_value)
+            token = GhostAccessToken.objects.select_for_update().get(token__iexact=token_value)
         except GhostAccessToken.DoesNotExist:
             raise SecurityError('invalid')
         now = timezone.now()

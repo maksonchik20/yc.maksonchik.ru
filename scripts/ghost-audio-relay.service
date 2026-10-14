@@ -1,6 +1,7 @@
 [Unit]
 Description=Ghost Note audio WebSocket relay
-After=network.target
+Requires=ghost-audio-relay.socket
+After=network.target ghost-audio-relay.socket who-update-postgresql.service
 
 [Service]
 Type=simple
@@ -11,9 +12,7 @@ Environment=GHOST_PROJECT_DIR=/usr/share/django-projects/welcome
 Environment=DJANGO_SETTINGS_MODULE=welcome.settings
 Environment=GHOST_AUDIO_RELAY_HOST=127.0.0.1
 Environment=GHOST_AUDIO_RELAY_PORT=8767
+Environment=GHOST_AUDIO_RELAY_IDLE_SECONDS=300
 ExecStart=/usr/share/django-projects/welcome/venv/bin/python /usr/share/django-projects/scripts/ghost_audio_relay.py
 Restart=on-failure
 RestartSec=3
-
-[Install]
-WantedBy=multi-user.target

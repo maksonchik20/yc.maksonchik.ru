@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up GhostNote daily at 01:15 UTC (04:15 Moscow)
+
+[Timer]
+OnCalendar=*-*-* 01:15:00 UTC
+AccuracySec=1min
+Persistent=true
+Unit=ghost-postgresql-backup.service
+
+[Install]
+WantedBy=timers.target

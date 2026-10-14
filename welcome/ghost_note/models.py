@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
+from .fields import NullSafeTextField
 from .referrals import calculate_commission
 
 ACCESS_TOKEN_LENGTH = 6
@@ -25,7 +26,7 @@ def generate_access_token():
             secrets.choice(ACCESS_TOKEN_ALPHABET)
             for _ in range(ACCESS_TOKEN_LENGTH)
         )
-        if not GhostAccessToken.objects.filter(token=token).exists():
+        if not GhostAccessToken.objects.filter(token__iexact=token).exists():
             return token
     raise RuntimeError('Unable to generate a unique access token')
 
@@ -40,7 +41,7 @@ def generate_referral_key():
             secrets.choice(REFERRAL_KEY_ALPHABET)
             for _ in range(REFERRAL_KEY_LENGTH)
         )
-        if not GhostUser.objects.filter(referral_key=key).exists():
+        if not GhostUser.objects.filter(referral_key__iexact=key).exists():
             return key
     raise RuntimeError('Unable to generate a unique referral key')
 
@@ -561,7 +562,7 @@ class GhostSession(models.Model):
 
 class GhostTextMessage(models.Model):
     session = models.ForeignKey(GhostSession, on_delete=models.CASCADE, related_name='text_messages')
-    text = models.TextField()
+    text = NullSafeTextField()
     delivered = models.BooleanField(default=False)
     source = models.CharField(max_length=16, default='viewer', choices=[('viewer', 'Viewer'), ('local', 'Локальный viewer')])
     event_id = models.UUIDField(null=True, blank=True)

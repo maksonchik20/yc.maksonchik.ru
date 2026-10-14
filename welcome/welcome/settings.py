@@ -1,3 +1,5 @@
+import json
+import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -66,6 +68,20 @@ DATABASES = {
         },
     }
 }
+
+# Keep deployment credentials outside the repository; MySQL remains available
+# for an explicit pre-cutover rollback while its original data is untouched.
+GHOST_DATABASE_CONFIG_FILE = Path(os.environ.get(
+    'GHOST_DATABASE_CONFIG_FILE', '/etc/ghost-note/database.json'))
+if GHOST_DATABASE_CONFIG_FILE.exists():
+    with GHOST_DATABASE_CONFIG_FILE.open() as database_config_stream:
+        databaseKeyToValue = json.load(database_config_stream)
+    if databaseKeyToValue.get('ENGINE') != 'django.db.backends.postgresql':
+        raise ValueError('GhostNote database configuration must use PostgreSQL')
+    DATABASES = {'default': databaseKeyToValue}
+elif Path('/etc/ghost-note/postgresql-required').exists():
+    raise ValueError('GhostNote PostgreSQL configuration is missing; refusing MySQL fallback')
+
 
 AUTH_PASSWORD_VALIDATORS = [
     {

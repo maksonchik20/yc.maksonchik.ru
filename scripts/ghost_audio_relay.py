@@ -4,8 +4,10 @@
 import asyncio
 import logging
 import os
+import socket
 import sys
 from contextlib import suppress
+from functools import partial
 from urllib.parse import parse_qs, urlparse
 
 BASE_DIR = os.environ.get(
@@ -22,6 +24,7 @@ import django  # noqa: E402
 django.setup()
 
 from asgiref.sync import sync_to_async  # noqa: E402
+from django.db import DatabaseError, InterfaceError, close_old_connections, connection  # noqa: E402
 
 from ghost_note.auth import session_token_valid, validate_access_token  # noqa: E402
 from ghost_note.models import GhostSession  # noqa: E402
@@ -30,12 +33,15 @@ from ghost_note.security_v2 import SecurityError, require_session, session_is_v2
 try:
     import websockets
     from websockets.exceptions import ConnectionClosed
+    from websockets.extensions.permessage_deflate import enable_server_permessage_deflate
+    from websockets.legacy.server import WebSocketServer, WebSocketServerProtocol
 except ImportError as exc:
     raise SystemExit('Install websockets: pip install websockets') from exc
 
 LOG = logging.getLogger('ghost_audio_relay')
 HOST = os.environ.get('GHOST_AUDIO_RELAY_HOST', '127.0.0.1')
 PORT = int(os.environ.get('GHOST_AUDIO_RELAY_PORT', '8767'))
+IDLE_SECONDS = float(os.environ.get('GHOST_AUDIO_RELAY_IDLE_SECONDS', '300'))
 
 
 class Room:
@@ -51,6 +57,7 @@ class Room:
 DEFAULT_AUDIO_CFG = '{"rate":48000,"channels":2,"format":"f32le"}'
 
 sessionIdToRoom = {}
+fanout_tasks = set()
 AUTH_RECHECK_SECONDS = 5
 
 
@@ -59,7 +66,7 @@ def _get_session(session_id):
     if not session_id:
         return None
     try:
-        return GhostSession.objects.get(session_id=session_id)
+        return GhostSession.objects.defer('screenshot').get(session_id__iexact=session_id)
     except GhostSession.DoesNotExist:
         return None
 
@@ -119,9 +126,59 @@ def _validate_uploader(session_id, token, protocol='1', credential=''):
     return session, None
 
 
-get_session = sync_to_async(_get_session, thread_sensitive=True)
-validate_listener = sync_to_async(_validate_listener, thread_sensitive=True)
-validate_uploader = sync_to_async(_validate_uploader, thread_sensitive=True)
+def discard_database_connection():
+    try:
+        connection.close()
+    except (DatabaseError, InterfaceError):
+        # MySQLdb may raise 2006 while closing an already-dead socket. Django
+        # still clears its handle in finally; that successful discard isn't an
+        # authorization failure. Never ignore an error with a retained handle.
+        if connection.connection is not None:
+            raise
+
+
+def recycle_old_database_connections():
+    try:
+        close_old_connections()
+    except (DatabaseError, InterfaceError):
+        if connection.connection is not None:
+            raise
+
+
+def database_call(function, *args):
+    # This runs inside sync_to_async's DB-owning thread, not the asyncio thread.
+    # Copy the wrapper settings: other threads / HTTP workers retain their policy.
+    originalSettingToValue = connection.settings_dict
+    connection.settings_dict = dict(originalSettingToValue, CONN_MAX_AGE=60)
+    try:
+        recycle_old_database_connections()
+        if connection.connection is not None:
+            try:
+                usable = connection.is_usable()
+            except (DatabaseError, InterfaceError):
+                usable = False
+            if not usable:
+                discard_database_connection()
+        return function(*args)
+    except (DatabaseError, InterfaceError):
+        with suppress(DatabaseError, InterfaceError):
+            discard_database_connection()
+        raise
+    finally:
+        try:
+            recycle_old_database_connections()
+        finally:
+            connection.settings_dict = originalSettingToValue
+
+
+def _close_database_connection():
+    discard_database_connection()
+
+
+get_session = sync_to_async(partial(database_call, _get_session), thread_sensitive=True)
+validate_listener = sync_to_async(partial(database_call, _validate_listener), thread_sensitive=True)
+validate_uploader = sync_to_async(partial(database_call, _validate_uploader), thread_sensitive=True)
+close_database_connection = sync_to_async(_close_database_connection, thread_sensitive=True)
 
 
 def get_room(session_id):
@@ -155,6 +212,12 @@ async def fanout(room, message):
     for result in results:
         if result is not None and not isinstance(result, Exception):
             room.sinks.discard(result)
+
+
+def schedule_fanout(room, message):
+    task = asyncio.create_task(fanout(room, message))
+    fanout_tasks.add(task)
+    task.add_done_callback(fanout_tasks.discard)
 
 
 async def handler(websocket, path):
@@ -268,7 +331,7 @@ async def handler(websocket, path):
                         session_id, room.bytes_forwarded, len(room.sinks),
                     )
                 msg = bytes(message)
-                asyncio.create_task(fanout(room, msg))
+                schedule_fanout(room, msg)
                 continue
             await fanout(room, message)
     except ConnectionClosed:
@@ -283,16 +346,118 @@ async def handler(websocket, path):
         LOG.info('uploader left %s', session_id)
 
 
+def inherited_listener():
+    """Take systemd's single Accept=no listener; never bind a second port."""
+    listen_pid = os.environ.pop('LISTEN_PID', '')
+    listen_fds = os.environ.pop('LISTEN_FDS', '')
+    os.environ.pop('LISTEN_FDNAMES', None)
+    if not listen_pid and not listen_fds:
+        return None
+    if listen_pid != str(os.getpid()) or listen_fds != '1':
+        raise RuntimeError('Expected one listening socket from systemd for this process')
+    listener = socket.socket(fileno=3)
+    if (listener.family not in (socket.AF_INET, socket.AF_INET6)
+            or listener.type != socket.SOCK_STREAM
+            or not listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN)):
+        listener.close()
+        raise RuntimeError('systemd passed a non-listening TCP socket')
+    listener.set_inheritable(False)
+    listener.setblocking(False)
+    return listener
+
+
+class IdleWebSocketServer(WebSocketServer):
+    """Keep accepted handshakes valid while briefly quiescing the listener."""
+
+    quiescing = False
+
+    def is_serving(self):
+        return self.quiescing or super().is_serving()
+
+
+async def serve_listener(listener, idle_seconds=0, ws_handler=handler):
+    """An anchor FD preserves the backlog while the accepting FD is closed.
+
+    systemd owns another reference to this same listening socket. On normal
+    idle exit it retains unaccepted connections and starts the next process.
+    A connection already accepted during quiescing must instead be allowed to
+    finish its handshake; in that case we immediately resume accepting here.
+    """
+    loop = asyncio.get_running_loop()
+    server = IdleWebSocketServer()
+    factory = partial(
+        WebSocketServerProtocol, ws_handler, server,
+        max_size=2 ** 20, ping_interval=None,
+        extensions=enable_server_permessage_deflate(None),
+    )
+
+    async def start_accepting():
+        accepting_socket = listener.dup()
+        try:
+            return await loop.create_server(factory, sock=accepting_socket)
+        except BaseException:
+            accepting_socket.close()
+            raise
+
+    server.wrap(await start_accepting())
+    last_busy_at = loop.time()
+    try:
+        if idle_seconds <= 0:
+            await asyncio.Future()
+        while True:
+            await asyncio.sleep(min(1, idle_seconds))
+            # The registry includes TCP sockets still in the WebSocket
+            # handshake and handlers waiting for authentication, not just rooms.
+            if server.websockets or fanout_tasks:
+                last_busy_at = loop.time()
+                continue
+            if loop.time() - last_busy_at < idle_seconds:
+                continue
+            server.quiescing = True
+            server.server.close()
+            # Drain accept/connection_made callbacks already queued before close.
+            # Do not wait_closed here: newer asyncio versions also wait for
+            # accepted connections, which would delay resuming the listener.
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
+            if server.websockets or fanout_tasks:
+                server.server = await start_accepting()
+                server.quiescing = False
+                last_busy_at = loop.time()
+                continue
+            server.quiescing = False
+            LOG.info('idle for %.0fs; returning listener to systemd', idle_seconds)
+            return
+    finally:
+        server.quiescing = False
+        server.close()
+        await server.wait_closed()
+
+
 async def main():
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s %(levelname)s %(message)s',
     )
-    LOG.info('starting on %s:%s', HOST, PORT)
-    async with websockets.serve(
-        handler, HOST, PORT, max_size=2 ** 20, ping_interval=None
-    ):
-        await asyncio.Future()
+    listener = inherited_listener()
+    if listener is not None:
+        LOG.info('starting on systemd listener %s', listener.getsockname())
+        try:
+            await serve_listener(listener, idle_seconds=IDLE_SECONDS)
+        finally:
+            listener.close()
+            await close_database_connection()
+    else:
+        # Manual launches keep the old host/port and never auto-exit: no socket
+        # owner exists to reactivate them after idle shutdown.
+        LOG.info('starting on %s:%s', HOST, PORT)
+        try:
+            async with websockets.serve(
+                handler, HOST, PORT, max_size=2 ** 20, ping_interval=None
+            ):
+                await asyncio.Future()
+        finally:
+            await close_database_connection()
 
 
 if __name__ == '__main__':

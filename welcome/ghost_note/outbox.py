@@ -14,6 +14,7 @@ from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from .models import GhostPurchaseOrder, GhostTelegramBotMessage, GhostTelegramOutbox
+from .outbox_wake import notify_outbox_worker
 from .telegram_text import split_message_text
 
 logger = logging.getLogger(__name__)
@@ -65,6 +66,8 @@ def enqueue(*, chat_id, method, payload, idempotency_key=None, completion=None,
         )
     else:
         item = GhostTelegramOutbox.objects.create(**defaults)
+    if item.status == item.Status.PENDING:
+        transaction.on_commit(notify_outbox_worker)
     return item
 
 
@@ -163,6 +166,7 @@ def _record_success(item):
         current.log_message = log
         current.save(update_fields=['status', 'sent_at', 'last_error', 'log_message'])
         _complete_order(item)
+        transaction.on_commit(notify_outbox_worker)
     return 'sent'
 
 
@@ -189,6 +193,7 @@ def _record_failure(item, exc):
         current.next_attempt_at = timezone.now() + timedelta(seconds=delay)
         current.save(update_fields=['status', 'last_error', 'next_attempt_at'])
         _complete_order(item, error=error[:500])
+        transaction.on_commit(notify_outbox_worker)
         if (permanent or item.attempts >= ALERT_AFTER_ATTEMPTS) and not current.alerted_at and not item.is_alert:
             owner = _admin_chat_id()
             if owner:
@@ -239,3 +244,15 @@ def process_outbox(limit=50):
         visited.append(item.pk)
         stats[deliver(item.pk)] += 1
     return stats
+
+
+def next_outbox_attempt():
+    # Only each chat's first pending row is eligible. Later messages can be due
+    # already but must not cause a busy loop while an earlier row is leased.
+    earlier = GhostTelegramOutbox.objects.filter(
+        chat_id=OuterRef('chat_id'), status=GhostTelegramOutbox.Status.PENDING,
+        pk__lt=OuterRef('pk'),
+    )
+    return (GhostTelegramOutbox.objects.filter(status=GhostTelegramOutbox.Status.PENDING)
+            .annotate(has_earlier=Exists(earlier)).filter(has_earlier=False)
+            .order_by('next_attempt_at').values_list('next_attempt_at', flat=True).first())

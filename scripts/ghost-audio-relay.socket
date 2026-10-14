@@ -1,0 +1,12 @@
+[Unit]
+Description=Ghost Note audio WebSocket activation socket
+
+[Socket]
+ListenStream=127.0.0.1:8767
+Accept=no
+Service=ghost-audio-relay.service
+Backlog=128
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

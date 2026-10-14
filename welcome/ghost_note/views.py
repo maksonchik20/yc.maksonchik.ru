@@ -39,7 +39,7 @@ def _get_session(session_id):
     except ValueError:
         return None
     try:
-        return GhostSession.objects.get(session_id=session_id)
+        return GhostSession.objects.get(session_id__iexact=session_id)
     except GhostSession.DoesNotExist:
         return None
 
@@ -53,7 +53,8 @@ def _get_or_create_session(session_id, access_token=None):
     except ValueError:
         return None
 
-    session, created = GhostSession.objects.get_or_create(session_id=session_id)
+    session, created = GhostSession.objects.get_or_create(
+        session_id__iexact=session_id, defaults={'session_id': session_id})
     # Do not attach a new legacy token to an orphaned, protected v2 session.
     if hasattr(session, 'security_v2'):
         return None
@@ -135,7 +136,7 @@ def viewer_by_token(request):
 
 @require_GET
 def viewer(request, session_id):
-    session = get_object_or_404(GhostSession, session_id=session_id)
+    session = get_object_or_404(GhostSession, session_id__iexact=str(session_id))
     denied = _require_session_access(session)
     if denied is not None:
         return denied

@@ -1,0 +1,11 @@
+[Unit]
+Description=Check mirrored WhoUpdate activity once per minute
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Persistent=true
+Unit=ghost-silence-monitor.service
+
+[Install]
+WantedBy=timers.target

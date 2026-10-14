@@ -1,0 +1,13 @@
+[Unit]
+Description=Delete expired opt-in GhostNote activity screenshots
+After=who-update-postgresql.service
+
+[Service]
+Type=oneshot
+User=www-data
+WorkingDirectory=/usr/share/django-projects/welcome
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/share/django-projects/welcome/venv/bin/python manage.py cleanup_ghost_activity
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true

@@ -1,0 +1,20 @@
+[Unit]
+Description=Check mirrored WhoUpdate activity in the GhostNote database
+After=network.target who-update-postgresql.service
+ConditionFileNotEmpty=/etc/ghost-note/database.json
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/usr/share/django-projects/welcome
+Environment=DJANGO_SETTINGS_MODULE=welcome.settings
+Environment=GHOST_DATABASE_CONFIG_FILE=/etc/ghost-note/database.json
+StateDirectory=ghost-silence-monitor
+StateDirectoryMode=0750
+UMask=0027
+ExecStart=/usr/share/django-projects/welcome/venv/bin/python manage.py check_who_update_silence --state-file /var/lib/ghost-silence-monitor/state.json
+TimeoutStartSec=120
+PrivateTmp=true
+NoNewPrivileges=true
+ProtectSystem=full

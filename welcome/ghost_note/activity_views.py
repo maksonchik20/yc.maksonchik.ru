@@ -26,7 +26,9 @@ def lock_session(request):
     security = authorized(request)
     GhostAccessToken.objects.select_for_update().get(pk=security.access_token_id)
     security = authorized(request)
-    return GhostSecuritySession.objects.select_for_update().select_related('access_token').get(pk=security.pk)
+    # The token is already locked above. PostgreSQL cannot lock the nullable
+    # side of the outer join produced by select_related('access_token').
+    return GhostSecuritySession.objects.select_for_update().get(pk=security.pk)
 
 
 def require_consent(security):

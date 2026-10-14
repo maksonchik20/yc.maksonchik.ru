@@ -1,6 +1,6 @@
 [Unit]
 Description=Ghost Note Telegram bot (long polling)
-After=network.target
+After=network.target who-update-postgresql.service
 
 [Service]
 Type=simple

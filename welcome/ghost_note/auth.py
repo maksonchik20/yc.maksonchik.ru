@@ -42,7 +42,7 @@ def validate_access_token(token_str):
         return None, 'invalid', None
 
     try:
-        token = GhostAccessToken.objects.get(token=token_str)
+        token = GhostAccessToken.objects.get(token__iexact=token_str)
     except GhostAccessToken.DoesNotExist:
         return None, 'invalid', None
 
@@ -95,8 +95,8 @@ def session_id_for_access_token(token_str):
 def get_or_create_session_for_token(access_token):
     canonical_id = session_id_for_access_token(access_token.token)
     session, created = GhostSession.objects.get_or_create(
-        session_id=canonical_id,
-        defaults={'access_token': access_token},
+        session_id__iexact=canonical_id,
+        defaults={'session_id': canonical_id, 'access_token': access_token},
     )
     if not created and session.access_token_id != access_token.id:
         session.access_token = access_token
